@@ -1,0 +1,26 @@
+# Build outputs
+/build/
+/app/build/
+*.apk
+*.aab
+*.aar
+
+# Gradle
+.gradle/
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Keystore (never commit real keystores)
+*.jks
+*.keystore
+
+# Real Firebase config (placeholder is fine, real one is not)
+# If you replace google-services.json with your real one, add it here:
+# app/google-services.json

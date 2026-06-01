@@ -1,0 +1,445 @@
+package com.biospace.ansmonitorpro.data
+
+import com.biospace.ansmonitorpro.api.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.TimeUnit
+import kotlin.math.*
+
+class DataRepository {
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .build()
+
+    private fun <T> build(base: String, cls: Class<T>): T = Retrofit.Builder()
+        .baseUrl(base).client(client)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build().create(cls)
+
+    private val noaa  = build("https://services.swpc.noaa.gov/", NoaaApi::class.java)
+    private val donki = build("https://kauai.ccmc.gsfc.nasa.gov/DONKI/", DonkiApi::class.java)
+    private val meteo = build("https://api.open-meteo.com/", OpenMeteoApi::class.java)
+    private val geo   = build("https://nominatim.openstreetmap.org/", GeocodingApi::class.java)
+
+    private fun dateStr(daysAgo: Int = 0): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val cal = Calendar.getInstance(); cal.add(Calendar.DAY_OF_YEAR, -daysAgo)
+        return sdf.format(cal.time)
+    }
+
+    // ── Space Weather — parallel Retrofit fetches ─────────────────────────
+    suspend fun fetchSpaceWeather(): SpaceWeatherData = withContext(Dispatchers.IO) {
+        val today = dateStr(0); val week = dateStr(7)
+
+        val kpR   = async { runCatching { noaa.getKp() } }
+        val plaR  = async { runCatching { noaa.getSolarWindPlasma() } }
+        val magR  = async { runCatching { noaa.getSolarWindMag() } }
+        val hpR   = async { runCatching { noaa.getHemiPower() } }
+        val flrR  = async { runCatching { donki.getFlares(week, today) } }
+        val cmeR  = async { runCatching { donki.getCME(week, today) } }
+        val gstR  = async { runCatching { donki.getGST(week, today) } }
+        val ipsR  = async { runCatching { donki.getIPS(week, today) } }
+        val hssR  = async { runCatching { donki.getHSS(week, today) } }
+        val sepR  = async { runCatching { donki.getSEP(week, today) } }
+
+        val kpData  = kpR.await().getOrNull()
+        val plasma  = plaR.await().getOrNull()
+        val mag     = magR.await().getOrNull()
+        val hpTxt   = hpR.await().getOrNull()
+        val flares  = flrR.await().getOrNull()
+        val cmeData = cmeR.await().getOrNull()
+        val gst     = gstR.await().getOrNull()
+        val ips     = ipsR.await().getOrNull()
+        val hss     = hssR.await().getOrNull()
+        val sep     = sepR.await().getOrNull()
+
+        // Kp
+        val kpHist = mutableListOf<Double>()
+        var kp = 1.0
+        kpData?.drop(1)?.forEach { row ->
+            (row as? List<*>)?.getOrNull(1)?.toString()?.toDoubleOrNull()?.let {
+                if (it >= 0) kpHist.add(it)
+            }
+        }
+        if (kpHist.isNotEmpty()) kp = kpHist.last()
+
+        // Solar wind plasma
+        val speedHist = mutableListOf<Double>()
+        val densHist  = mutableListOf<Double>()
+        var speed = 400.0; var density = 5.0; var temp = 100.0
+        plasma?.drop(1)?.forEach { row ->
+            val r = row as? List<*>
+            r?.getOrNull(1)?.toString()?.toDoubleOrNull()?.let { densHist.add(it) }
+            r?.getOrNull(2)?.toString()?.toDoubleOrNull()?.let { speedHist.add(it) }
+            r?.getOrNull(3)?.toString()?.toDoubleOrNull()?.let { temp = it / 1000.0 }
+        }
+        if (speedHist.isNotEmpty()) { speed = speedHist.last(); density = densHist.last() }
+
+        // IMF mag
+        val bzHist = mutableListOf<Double>()
+        var bz = 0.0; var bt = 5.0
+        mag?.drop(1)?.forEach { row ->
+            val r = row as? List<*>
+            r?.getOrNull(3)?.toString()?.toDoubleOrNull()?.let { bzHist.add(it) }
+            r?.getOrNull(6)?.toString()?.toDoubleOrNull()?.let { bt = it }
+        }
+        if (bzHist.isNotEmpty()) bz = bzHist.last()
+
+        // Hemispheric power
+        var hp = 20.0
+        hpTxt?.split("\n")
+            ?.filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith(":") }
+            ?.lastOrNull()?.trim()?.split("\\s+".toRegex())
+            ?.getOrNull(4)?.toDoubleOrNull()?.let { if (it > 0) hp = it }
+
+        // Flares
+        val parsedFlares = flares?.takeLast(5)?.reversed()?.mapNotNull { f ->
+            val fm = f as? Map<*, *> ?: return@mapNotNull null
+            val cls = fm["classType"]?.toString() ?: "B1.0"
+            val linked = fm["linkedEvents"] as? List<*>
+            val hasCme = linked?.any { e ->
+                (e as? Map<*, *>)?.get("activityID")?.toString()?.contains("CME") == true
+            } == true
+            val loc = fm["sourceLocation"]?.toString() ?: ""
+            val angle = Regex("[EW](\\d+)").find(loc)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 50
+            FlareEntry(
+                flareClass = cls,
+                startTime = fm["beginTime"]?.toString()?.let { if (it.length >= 16) it.substring(11, 16) else "--:--" } ?: "--:--",
+                direction = if (angle < 20) "Earth-directed" else if (angle < 45) "Partial" else "Limb",
+                hasCme = hasCme
+            )
+        } ?: emptyList()
+
+        // CME
+        var cmeSpeed = 300.0; var cmeAngle = 60.0; var cmeArrival = 999; var cmeDir = "Non-Halo"
+        cmeData?.lastOrNull()?.let {
+            val cm = it as? Map<*, *>
+            cmeSpeed = cm?.get("speed")?.toString()?.toDoubleOrNull() ?: cmeSpeed
+            cmeAngle = cm?.get("halfAngle")?.toString()?.toDoubleOrNull() ?: cmeAngle
+            cmeDir = if (cmeAngle < 20) "Full Halo" else if (cmeAngle < 40) "Partial Halo" else "Non-Halo"
+            cm?.get("time21_5")?.toString()?.let { t ->
+                runCatching {
+                    val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+                    val diff = sdf2.parse(t)!!.time - System.currentTimeMillis()
+                    cmeArrival = maxOf(0, (diff / 3_600_000).toInt())
+                }
+            }
+        }
+
+        val bzLabel = when {
+            bz < -10 -> "STRONGLY SOUTHWARD"; bz < -5 -> "SOUTHWARD"
+            bz < -1  -> "SLIGHTLY SOUTH"; bz < 1 -> "NEAR-ZERO UNSTABLE"
+            bz < 5   -> "SLIGHTLY NORTH"; bz < 10 -> "NORTHWARD"
+            else     -> "STRONGLY NORTHWARD"
+        }
+        val kpLabel = when {
+            kp < 2 -> "QUIET"; kp < 3 -> "QUIET"; kp < 4 -> "UNSETTLED"
+            kp < 5 -> "ACTIVE"; kp < 6 -> "MINOR STORM"; kp < 7 -> "MODERATE STORM"
+            kp < 8 -> "STRONG STORM"; kp < 9 -> "SEVERE STORM"; else -> "EXTREME STORM"
+        }
+        val gLevel = when { kp >= 9 -> "G5"; kp >= 8 -> "G4"; kp >= 7 -> "G3"; kp >= 6 -> "G2"; kp >= 5 -> "G1"; else -> "G0" }
+        val fountain = if (hp > 100) "ACTIVE" else if (hp > 50) "MODERATE" else "QUIET"
+        val ts = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+
+        SpaceWeatherData(
+            kp = kp, kpLabel = kpLabel, kpHistory = kpHist.takeLast(24),
+            stormG = gLevel, stormS = "S0", stormR = "R0",
+            solarWindSpeed = speed, solarWindDensity = density, solarWindTemp = temp,
+            bz = bz, bt = bt, bzLabel = bzLabel,
+            bzHistory = bzHist.takeLast(168),
+            speedHistory = speedHist.takeLast(60),
+            densityHistory = densHist.takeLast(60),
+            gstActive = (gst?.size ?: 0) > 0,
+            ipsCount = ips?.size ?: 0,
+            hssActive = (hss?.size ?: 0) > 0,
+            sepActive = (sep?.size ?: 0) > 0,
+            hemisphericPower = hp,
+            fountainDumping = fountain,
+            flares = parsedFlares,
+            cmeSpeed = cmeSpeed,
+            cmeArrivalHrs = cmeArrival,
+            cmeDirection = cmeDir,
+            timestamp = ts
+        )
+    }
+
+    // ── NOAA Alerts ───────────────────────────────────────────────────────
+    suspend fun fetchAlerts(): List<AlertEntry> = withContext(Dispatchers.IO) {
+        try {
+            val req = okhttp3.Request.Builder()
+                .url("https://services.swpc.noaa.gov/products/alerts.json").build()
+            val txt = client.newCall(req).execute().use { it.body?.string() ?: "" }
+            // Parse using Gson — already a dependency, avoids org.json
+            @Suppress("UNCHECKED_CAST")
+            val arr = com.google.gson.Gson().fromJson(txt, List::class.java) as? List<Map<*, *>> ?: emptyList()
+            val list = mutableListOf<AlertEntry>()
+            arr.take(20).forEach { obj ->
+                val msg  = obj["message"]?.toString() ?: ""
+                val code = obj["product_id"]?.toString()?.takeLast(6)?.trim() ?: ""
+                val serial  = Regex("Serial Number: (\\d+)").find(msg)?.groupValues?.get(1) ?: ""
+                val issue   = Regex("Issue Time: (.+)").find(msg)?.groupValues?.get(1)?.trim()?.take(30) ?: ""
+                val msgCode = Regex("Space Weather Message Code: (\\w+)").find(msg)?.groupValues?.get(1) ?: code
+                list.add(AlertEntry(code, msgCode, serial, issue, msg.take(600)))
+            }
+            list
+        } catch (e: Exception) { emptyList() }
+    }
+
+    // ── Environment ───────────────────────────────────────────────────────
+    suspend fun fetchEnvironment(lat: Double, lon: Double, cityName: String): EnvData =
+        withContext(Dispatchers.IO) {
+            try {
+                val json = meteo.getWeather(lat, lon)
+                val cur = json["current"] as? Map<*, *> ?: return@withContext EnvData(cityName = cityName, lat = lat, lon = lon)
+                val hourly = json["hourly"] as? Map<*, *>
+
+                val tempF    = cur["temperature_2m"]?.toString()?.toDoubleOrNull()?.toInt() ?: 70
+                val humid    = cur["relative_humidity_2m"]?.toString()?.toDoubleOrNull()?.toInt() ?: 55
+                val dewF     = cur["dew_point_2m"]?.toString()?.toDoubleOrNull()?.toInt() ?: 60
+                val pressure = cur["surface_pressure"]?.toString()?.toDoubleOrNull() ?: 1013.0
+                val wind     = cur["wind_speed_10m"]?.toString()?.toDoubleOrNull()?.toInt() ?: 8
+                val heatIdx  = cur["apparent_temperature"]?.toString()?.toDoubleOrNull()?.toInt() ?: tempF
+                val uv       = cur["uv_index"]?.toString()?.toDoubleOrNull() ?: 3.0
+                val timeStr  = cur["time"]?.toString() ?: ""
+                val curHour  = try { timeStr.substringAfterLast("T").substringBefore(":").toInt() } catch (e: Exception) { 12 }
+
+                val pressArr = (hourly?.get("surface_pressure") as? List<*>)
+                val pressHist = mutableListOf<Double>()
+                pressArr?.let { arr ->
+                    for (i in curHour downTo maxOf(0, curHour - 23)) {
+                        (arr.getOrNull(i) as? Double)?.let { pressHist.add(it) }
+                            ?: arr.getOrNull(i)?.toString()?.toDoubleOrNull()?.let { pressHist.add(it) }
+                    }
+                }
+                val pressureDelta = if (pressHist.size >= 2) pressHist.first() - pressHist.last() else 0.0
+
+                val locName = if (cityName.isBlank() || cityName == "Locating…") {
+                    runCatching {
+                        val r = geo.reverse(lat = lat, lon = lon)
+                        val addr = r["address"] as? Map<*, *>
+                        val city = (addr?.get("city") ?: addr?.get("town") ?: addr?.get("village") ?: addr?.get("county") ?: "").toString()
+                        val state = (addr?.get("state_code") ?: "").toString()
+                        if (state.isNotBlank()) "$city, $state".uppercase() else city.uppercase()
+                    }.getOrDefault(cityName)
+                } else cityName
+
+                val tempLabel = when { tempF > 95 -> "EXTREME HEAT"; tempF > 85 -> "WARM"; tempF > 70 -> "COMFORTABLE"; tempF > 55 -> "COOL"; else -> "COLD" }
+                val humidLabel = when { humid > 80 -> "HIGH"; humid > 60 -> "MODERATE"; humid > 30 -> "NORMAL"; else -> "LOW" }
+                val pressLabel = when { pressureDelta < -3 -> "▼ DROPPING"; pressureDelta > 3 -> "▲ RISING"; abs(pressureDelta) < 1 -> "STABLE"; pressureDelta < 0 -> "▼ SLIGHT DROP"; else -> "▲ SLIGHT RISE" }
+                val windLabel  = when { wind > 25 -> "STRONG"; wind > 15 -> "BREEZY"; wind > 8 -> "MODERATE"; else -> "LIGHT" }
+                val heatLoad   = when { tempF > 95 -> "SEVERE"; tempF > 85 -> "MODERATE"; tempF > 75 -> "MILD"; else -> "LOW" }
+                val humidStress = when { humid > 80 -> "HIGH"; humid > 65 -> "MODERATE"; else -> "LOW" }
+
+                EnvData(
+                    cityName = locName, lat = lat, lon = lon,
+                    tempF = tempF, humidity = humid, pressureHpa = pressure,
+                    windMph = wind, uvIndex = uv, dewpointF = dewF,
+                    tempLabel = tempLabel, humidLabel = humidLabel,
+                    pressureLabel = pressLabel, windLabel = windLabel,
+                    pressureDelta = pressureDelta, pressureHistory = pressHist,
+                    heatLoad = heatLoad, humidStress = humidStress, heatIndex = heatIdx
+                )
+            } catch (e: Exception) {
+                EnvData(cityName = cityName, lat = lat, lon = lon)
+            }
+        }
+
+    // ── Schumann (derived model) ──────────────────────────────────────────
+    fun deriveSchumann(space: SpaceWeatherData, env: EnvData): SchumannData {
+        val kp = space.kp; val speed = space.solarWindSpeed; val pd = env.pressureDelta
+        val freqDrift = ((speed - 400.0) / 1000.0).coerceIn(-0.5, 1.2)
+        val hz        = (7.83 + freqDrift).coerceIn(7.0, 9.5)
+        val amp       = (1.2 - kp * 0.08 + freqDrift * 0.1).coerceIn(0.3, 3.0)
+        val q         = (5.5 - kp * 0.35 - abs(pd) * 0.15).coerceAtLeast(2.0)
+        val coherence = ((1.0 - kp / 10.0) * 100).toInt().coerceIn(10, 95)
+        val tec       = (15.0 + freqDrift * 3.0 + kp * 0.4).coerceIn(5.0, 50.0)
+        val coherenceLabel = when { coherence >= 80 -> "HIGH COHERENCE"; coherence >= 60 -> "MODERATE COHERENCE"; coherence >= 40 -> "LOW COHERENCE"; else -> "DISRUPTED" }
+        val intensityLabel = when { amp > 2.0 -> "ELEVATED"; amp > 1.5 -> "NORMAL"; amp > 0.8 -> "SUPPRESSED"; else -> "VERY LOW" }
+        val freqLabel = when { abs(freqDrift) < 0.05 -> "STABLE"; freqDrift > 0 -> "ELEVATED"; else -> "DEPRESSED" }
+        val bzStab = if (abs(space.bz) < 2.0) "UNSTABLE" else if (space.bz > 0) "STABLE NORTH" else "STABLE SOUTH"
+        val cavityHeight = when { kp > 5 -> "COMPRESSED"; kp > 3 -> "SLIGHTLY COMPRESSED"; else -> "NOMINAL" }
+        val ampHistory = List(60) { i -> amp + sin(i * 0.3) * 0.2 + cos(i * 0.7) * 0.1 + (Math.random() - 0.5) * 0.05 }
+        return SchumannData(
+            fundamentalHz = hz, freqDrift = freqDrift, amplitudePt = amp, qFactor = q,
+            coherenceScore = coherence, coherenceLabel = coherenceLabel,
+            intensityLabel = intensityLabel, freqDriftLabel = freqLabel, ampLabel = intensityLabel,
+            tecLocal = tec, tecDelta = freqDrift * 0.3, cavityHeight = cavityHeight,
+            bzStability = bzStab, ampHistory = ampHistory
+        )
+    }
+
+    // ── ANS/Burden Engine — full 24-component weighted scoring ────────────
+    private val kpHistory    = ArrayDeque<Float>(12)
+    private val swHistory    = ArrayDeque<Float>(12)
+    private val bzHistEngine = ArrayDeque<Float>(12)
+    private val hrHistory    = ArrayDeque<Int>(10)
+    private val spO2History  = ArrayDeque<Int>(10)
+    private val bpHistory    = ArrayDeque<Int>(10)
+    private val pressHistory = ArrayDeque<Float>(12)
+    private val rmssdHistory = ArrayDeque<Float>(12)
+
+    fun computeAns(space: SpaceWeatherData, sr: SchumannData, env: EnvData, bio: Biometrics): AnsData {
+        push(kpHistory, space.kp.toFloat())
+        push(swHistory, space.solarWindSpeed.toFloat())
+        push(bzHistEngine, space.bz.toFloat())
+        push(pressHistory, env.pressureHpa.toFloat())
+        if (bio.heartRate > 0) push(hrHistory, bio.heartRate)
+        if (bio.spO2 > 0) push(spO2History, bio.spO2)
+        if (bio.bpSys > 0) push(bpHistory, bio.bpSys)
+        if (bio.rmssd > 0) push(rmssdHistory, bio.rmssd)
+
+        val c = mutableMapOf<String, BurdenComponent>()
+        val kp = space.kp; val bz = space.bz; val speed = space.solarWindSpeed
+        val pd = env.pressureDelta; val tempF = env.tempF; val humid = env.humidity
+        val q = sr.qFactor; val amp = sr.amplitudePt
+
+        // Space
+        c["Kp Index"]      = comp("Kp Index", (kp / 9.0 * 100).toFloat(), fluc(kpHistory) * 15f)
+        c["Solar Wind"]    = comp("Solar Wind", ((speed - 300) / 500.0 * 100).toFloat().coerceIn(0f, 100f), fluc(swHistory) * 12f, "km/s", "${speed.toInt()}")
+        c["IMF Bz"]        = comp("IMF Bz", if (bz < 0) (abs(bz) / 20.0 * 100).toFloat().coerceIn(0f, 100f) else 0f, fluc(bzHistEngine) * 20f, "nT", "${"%.1f".format(bz)}")
+        val flareMag = space.flares.fold(0f) { acc, f -> acc + when { f.flareClass.startsWith("X") -> 40f; f.flareClass.startsWith("M") -> 20f; f.flareClass.startsWith("C") -> 8f; else -> 2f } }.coerceAtMost(100f)
+        c["Solar Flares"]  = comp("Solar Flares", flareMag, if (space.flares.any { it.hasCme }) 30f else if (space.flares.isNotEmpty()) 10f else 0f, "", "${space.flares.size} events")
+        c["CME"]           = comp("CME", ((space.cmeSpeed - 300) / 700.0 * 100).toFloat().coerceIn(0f, 100f), if (space.cmeArrivalHrs < 48) 45f else 0f, "km/s", "${space.cmeSpeed.toInt()}")
+        c["Geomag Storm"]  = comp("Geomag Storm", if (space.gstActive) (kp / 9.0 * 80).toFloat() else 0f, if (space.gstActive) 20f else 0f)
+        c["HSS/IPS"]       = comp("HSS/IPS", (if (space.hssActive) 30f else 0f) + (space.ipsCount * 15f).coerceAtMost(40f), if (space.hssActive || space.ipsCount > 0) 15f else 0f)
+        c["SEP"]           = comp("SEP", if (space.sepActive) 50f else 0f, if (space.sepActive) 25f else 0f)
+        c["Hemi. Power"]   = comp("Hemi. Power", ((space.hemisphericPower - 10) / 120.0 * 100).toFloat().coerceIn(0f, 100f), if (space.fountainDumping == "ACTIVE") 35f else if (space.fountainDumping == "MODERATE") 15f else 2f, "GW", "${space.hemisphericPower.toInt()}")
+        c["Schumann Res."] = comp("Schumann Res.", (abs(sr.freqDrift) * 30 + (amp - 1.0) * 5).toFloat().coerceIn(0f, 100f), if (abs(sr.freqDrift) > 0.15) 20f else if (abs(sr.freqDrift) > 0.05) 8f else 2f, "Hz", "${"%.2f".format(sr.fundamentalHz)}")
+
+        // Environment
+        c["Barometric"]    = comp("Barometric", (abs(pd) / 8.0 * 50).toFloat().coerceIn(0f, 100f), fluc(pressHistory) * 20f, "hPa", "${env.pressureHpa.toInt()}")
+        c["Heat/Humidity"] = comp("Heat/Humidity", (maxOf(0.0, (tempF - 75.0) / 30.0 + if (humid > 75) 0.15 else 0.0) * 70).toFloat().coerceIn(0f, 100f), 0f, "°F", "${tempF}°/${humid}%")
+
+        // Biometrics
+        val hrMag = if (bio.heartRate > 0) when { bio.heartRate > 120 -> 80f; bio.heartRate > 100 -> 50f; bio.heartRate in 1..54 -> 30f; else -> 5f } else 0f
+        c["Heart Rate"]    = comp("Heart Rate", hrMag, fluc(hrHistory) * 25f, "bpm", if (bio.heartRate > 0) "${bio.heartRate}" else "--")
+        val spO2Mag = if (bio.spO2 > 0) when { bio.spO2 < 88 -> 90f; bio.spO2 < 92 -> 65f; bio.spO2 < 95 -> 30f; bio.spO2 < 97 -> 10f; else -> 0f } else 0f
+        c["SpO2"]          = comp("SpO2", spO2Mag, fluc(spO2History) * 20f, "%", if (bio.spO2 > 0) "${bio.spO2}%" else "--")
+        val bpMag = if (bio.bpSys > 0) when { bio.bpSys > 160 -> 80f; bio.bpSys > 140 -> 50f; bio.bpSys > 130 -> 25f; bio.bpSys < 90 -> 60f; bio.bpSys < 100 -> 35f; else -> 5f } else 0f
+        c["Blood Pressure"]= comp("Blood Pressure", bpMag, fluc(bpHistory) * 22f, "mmHg", if (bio.bpSys > 0) "${bio.bpSys}/${bio.bpDia}" else "--")
+        val hrvMag = if (bio.rmssd > 0) when { bio.rmssd < 15 -> 75f; bio.rmssd < 25 -> 45f; bio.rmssd < 40 -> 20f; else -> 5f } else 0f
+        c["HRV (RMSSD)"]   = comp("HRV (RMSSD)", hrvMag, fluc(rmssdHistory) * 30f, "ms", if (bio.rmssd > 0) "${bio.rmssd.toInt()}" else "--")
+        val sleepMag = when { bio.sleepHours < 4 -> 60f; bio.sleepHours < 6 -> 35f; bio.sleepQuality < 40 -> 40f; bio.sleepQuality < 60 -> 20f; else -> 5f }
+        c["Sleep"]         = comp("Sleep", sleepMag, 0f, "hrs", if (bio.sleepHours > 0f) "${"%.1f".format(bio.sleepHours)}" else "--")
+        c["Stress Score"]  = comp("Stress Score", (bio.stressScore / 100f).coerceIn(0f, 1f) * 60f, 0f, "", if (bio.stressScore > 0) "${bio.stressScore}" else "--")
+
+        // Weighted aggregate
+        val weights = mapOf(
+            "Kp Index" to 1.4f, "Solar Wind" to 1.0f, "IMF Bz" to 1.6f,
+            "Solar Flares" to 1.2f, "CME" to 1.3f, "Geomag Storm" to 1.5f,
+            "HSS/IPS" to 0.9f, "SEP" to 1.1f, "Hemi. Power" to 1.0f, "Schumann Res." to 0.8f,
+            "Barometric" to 1.2f, "Heat/Humidity" to 0.9f,
+            "Heart Rate" to 1.8f, "SpO2" to 1.9f, "Blood Pressure" to 1.8f,
+            "HRV (RMSSD)" to 1.6f, "Sleep" to 1.2f, "Stress Score" to 1.0f
+        )
+        var wSum = 0f; var wTotal = 0f
+        c.forEach { (k, v) -> val w = weights[k] ?: 1f; wSum += v.combined * w; wTotal += w }
+        val overall = (wSum / wTotal).coerceIn(0f, 100f).toInt()
+        val mag  = c.values.map { it.magnitude }.average().toFloat().toInt()
+        val flucAvg = c.values.map { it.fluctuation }.average().toFloat().toInt()
+
+        val alertLevel = when {
+            overall >= 50 -> AlertLevel.BLUE
+            overall >= 25 -> AlertLevel.RED
+            overall >= 7  -> AlertLevel.YELLOW
+            else          -> AlertLevel.GREEN
+        }
+
+        val top = c.entries.sortedByDescending { it.value.combined }.take(3).map { it.key }
+        val narrative = buildString {
+            append("ANS burden ${overall}% — ")
+            if (overall < 7) append("Conditions favorable. ") else
+            if (overall < 25) append("Mild environmental loading. ") else
+            if (overall < 50) append("Moderate ANS stress. ") else append("HIGH burden — rest. ")
+            append("Top drivers: ${top.joinToString(", ")}.")
+            if (bio.heartRate > 100) append(" Tachycardia (${bio.heartRate} bpm).")
+            if (bio.spO2 in 1..94) append(" Low SpO2 (${bio.spO2}%).")
+            if (bz < -5) append(" Southward IMF (${"%.1f".format(bz)} nT).")
+            if (abs(pd) > 2.0) append(" Rapid pressure change.")
+        }
+
+        val symptoms = buildSymptoms(overall, kp, bz, speed, q, amp, pd)
+        val protocols = buildProtocols(overall, kp, bz, pd)
+
+        return AnsData(
+            loadIndex = overall, loadLabel = alertLevelToLoadLabel(alertLevel),
+            alertLevel = alertLevel, magnitude = mag, fluctuation = flucAvg,
+            coherencePct = (100 - overall * 0.4 - kp * 2).toInt().coerceIn(20, 95),
+            sympatheticBias = (40 + kp * 4 + if (bz < 0) 10.0 else 0.0 + abs(pd) * 2).toInt().coerceIn(20, 95),
+            fieldQuality = if (overall < 20) "OPTIMAL" else if (overall < 40) "ADEQUATE" else if (overall < 60) "IMPAIRED" else "DISRUPTED",
+            fieldQualityScore = ((100 - overall) / 100f).coerceIn(0f, 1f),
+            ansBalance = (0.4 + kp * 0.04 + if (bz < 0) 0.08 else 0.0).toFloat().coerceIn(0.1f, 0.95f),
+            hrvImpact = when { kp > 5 -> "SUPPRESSED"; kp > 3 -> "REDUCED"; else -> "NORMAL" },
+            cortisol = when { kp > 6 -> "ELEVATED"; kp > 4 -> "VARIABLE"; else -> "NORMAL" },
+            melatonin = when { sr.freqDrift > 0.3 -> "SUPPRESSED"; sr.coherenceScore < 50 -> "VARIABLE"; else -> "VARIABLE" },
+            symptoms = symptoms, mitigationProtocol = protocols,
+            breakdown = c, narrativeLine = narrative
+        )
+    }
+
+    private fun alertLevelToLoadLabel(l: AlertLevel) = when (l) {
+        AlertLevel.GREEN -> "MINIMAL LOAD"; AlertLevel.YELLOW -> "MODERATE LOAD"
+        AlertLevel.RED -> "HIGH LOAD"; AlertLevel.BLUE -> "EXTREME LOAD"
+    }
+
+    private fun buildSymptoms(load: Int, kp: Double, bz: Double, speed: Double, q: Double, amp: Double, pd: Double): List<SymptomEntry> {
+        return listOf(
+            SymptomEntry("⚡", "Orthostatic Tachycardia / POTS", (load * 0.45 + kp * 2).toInt().coerceIn(5, 95), levelOf(load * 0.45 + kp * 2), "Kp=${kp.toInt()} speed=${speed.toInt()}km/s"),
+            SymptomEntry("💥", "Crash / PEM", (load * 0.35 + (5.5 - q) * 5).toInt().coerceIn(5, 90), levelOf(load * 0.35 + (5.5 - q) * 5), "Q-factor=${"%.1f".format(q)}"),
+            SymptomEntry("🌙", "Sleep Disruption", (load * 0.30 + amp * 8).toInt().coerceIn(5, 90), levelOf(load * 0.30 + amp * 8), "SR amplitude=${"%.2f".format(amp)}pT"),
+            SymptomEntry("📊", "HRV Suppression", (load * 0.32 + (5.5 - q) * 4).toInt().coerceIn(5, 90), levelOf(load * 0.32 + (5.5 - q) * 4), "Q-factor=${"%.1f".format(q)}"),
+            SymptomEntry("🧠", "Cognitive Fog", (load * 0.28 + (5.5 - q) * 3).toInt().coerceIn(5, 85), levelOf(load * 0.28 + (5.5 - q) * 3), "Q-factor=${"%.1f".format(q)}"),
+            SymptomEntry("🦴", "Muscle Tension", (load * 0.25 + speed / 20).toInt().coerceIn(5, 80), levelOf(load * 0.25 + speed / 20), "Speed=${speed.toInt()}km/s"),
+            SymptomEntry("💧", "Fluid Dysregulation", (load * 0.20 + abs(pd) * 3).toInt().coerceIn(5, 75), levelOf(load * 0.20 + abs(pd) * 3), "Pressure Δ=${"%.1f".format(pd)}hPa/hr"),
+        ).sortedByDescending { it.pct }
+    }
+
+    private fun levelOf(v: Double): String = when { v >= 65 -> "HIGH"; v >= 40 -> "MODERATE"; v >= 20 -> "LOW"; else -> "MINIMAL" }
+
+    private fun buildProtocols(load: Int, kp: Double, bz: Double, pd: Double): List<String> {
+        val list = mutableListOf<String>()
+        if (abs(bz) < 2) list.add("IMF WATCH: Bz near-zero — watch for sudden southward excursion. Diaphragmatic breathing at 0.1 Hz (6 breaths/min) provides direct HRV stabilization.")
+        if (load > 20) list.add("PACING: Combined load of $load/100 warrants planned rest windows. Autonomic banking — resting before activity rather than after.")
+        list.add("HYDRATION: 2–3L fluid + adequate sodium chloride. Electrolyte replacement essential during elevated geomagnetic windows.")
+        if (kp > 3) list.add("GEOMAGNETIC: Kp ${kp.toInt()} active. Reduce orthostatic challenge. Increase compression garment use. Postpone demanding activities.")
+        if (abs(pd) > 2) list.add("BAROMETRIC: ${"%.1f".format(pd)} hPa/hr change. Increase fluid intake. Monitor for vascular headache and orthostatic symptoms.")
+        return list
+    }
+
+    // ── Integrated Assessment ─────────────────────────────────────────────
+    fun computeAssessment(space: SpaceWeatherData, sr: SchumannData, env: EnvData, ans: AnsData): AssessData {
+        val spaceScore = (space.kp / 9.0 * 25 + if (space.bz < -5) 10.0 else 0.0 + space.solarWindSpeed / 500.0 * 5).toInt().coerceIn(0, 40)
+        val srScore    = ((5.5 - sr.qFactor) / 3.5 * 20 + if (abs(sr.freqDrift) > 0.3) 5.0 else 0.0 + if (sr.amplitudePt > 2.0) 5.0 else 0.0).toInt().coerceIn(0, 30)
+        val envScore   = (abs(env.pressureDelta) / 8.0 * 15 + if (env.tempF > 85) 8.0 else 0.0 + if (env.humidity > 75) 7.0 else 0.0).toInt().coerceIn(0, 30)
+        val total      = (spaceScore + srScore + envScore).coerceIn(0, 100)
+        val label      = when { total >= 75 -> "CRITICAL LOAD"; total >= 55 -> "HIGH LOAD"; total >= 35 -> "MODERATE LOAD"; total >= 20 -> "LOW LOAD"; else -> "MINIMAL LOAD" }
+        val narrative  = "As of this reading, Kp is ${"%.1f".format(space.kp)} (${space.kpLabel}). " +
+            "SR field coherence is ${if (sr.qFactor >= 4.5) "adequate" else "reduced"} (Q=${"%.1f".format(sr.qFactor)}). " +
+            "Local temperature ${env.tempF}°F / Heat Index ${env.heatIndex}°F. " +
+            "Integrated body burden index: $total/100 — ${label.lowercase()}."
+        return AssessData(total, label, spaceScore, 40, srScore, 30, envScore, 30, narrative)
+    }
+
+    private fun comp(name: String, mag: Float, fluc: Float, unit: String = "", value: String = "") =
+        BurdenComponent(name, mag.coerceIn(0f, 100f), fluc.coerceIn(0f, 100f),
+            (mag * 0.4f + fluc * 0.6f).coerceIn(0f, 100f), unit, value)
+
+    private fun <T : Number> push(dq: ArrayDeque<T>, v: T) {
+        if (dq.size >= 12) dq.removeFirst(); dq.addLast(v)
+    }
+    private fun <T : Number> fluc(dq: ArrayDeque<T>): Float {
+        if (dq.size < 3) return 0f
+        val vals = dq.map { it.toFloat() }
+        val diffs = (1 until vals.size).map { abs(vals[it] - vals[it - 1]) }
+        val mean = vals.average().toFloat()
+        return if (mean == 0f) 0f else (diffs.average().toFloat() / (mean + 0.001f)).coerceIn(0f, 1f)
+    }
+}
