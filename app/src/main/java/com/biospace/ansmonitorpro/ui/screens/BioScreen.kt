@@ -207,15 +207,16 @@ fun BioField(label: String, value: String, onChange: (String) -> Unit, modifier:
 }
 
 @Composable
-fun bioFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor   = AppColors.Cyan,
-    unfocusedBorderColor = AppColors.Divider,
-    focusedTextColor     = AppColors.TextPrimary,
-    unfocusedTextColor   = AppColors.TextPrimary,
-    containerColor       = AppColors.CardBg,
-    cursorColor          = AppColors.Cyan,
-    focusedLabelColor    = AppColors.Cyan,
-    unfocusedLabelColor  = AppColors.TextDim
+fun bioFieldColors() = TextFieldDefaults.colors(
+    focusedIndicatorColor   = AppColors.Cyan,
+    unfocusedIndicatorColor = AppColors.Divider,
+    focusedTextColor        = AppColors.TextPrimary,
+    unfocusedTextColor      = AppColors.TextPrimary,
+    focusedContainerColor   = AppColors.CardBg,
+    unfocusedContainerColor = AppColors.CardBg,
+    cursorColor             = AppColors.Cyan,
+    focusedLabelColor       = AppColors.Cyan,
+    unfocusedLabelColor     = AppColors.TextDim
 )
 
 @Composable
