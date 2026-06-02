@@ -286,15 +286,11 @@ class DataRepository {
     private val pressHistory = ArrayDeque<Float>(12)
     private val rmssdHistory = ArrayDeque<Float>(12)
 
-    fun computeAns(space: SpaceWeatherData, sr: SchumannData, env: EnvData, bio: Biometrics): AnsData {
+    fun computeAns(space: SpaceWeatherData, sr: SchumannData, env: EnvData, bio: Biometrics, profile: AutonomicProfile = AutonomicProfile.STANDARD): AnsData {
         push(kpHistory, space.kp.toFloat())
         push(swHistory, space.solarWindSpeed.toFloat())
         push(bzHistEngine, space.bz.toFloat())
         push(pressHistory, env.pressureHpa.toFloat())
-        if (bio.heartRate > 0) push(hrHistory, bio.heartRate)
-        if (bio.spO2 > 0) push(spO2History, bio.spO2)
-        if (bio.bpSys > 0) push(bpHistory, bio.bpSys)
-        if (bio.rmssd > 0) push(rmssdHistory, bio.rmssd)
 
         val c = mutableMapOf<String, BurdenComponent>()
         val kp = space.kp; val bz = space.bz; val speed = space.solarWindSpeed
@@ -319,37 +315,40 @@ class DataRepository {
         c["Heat/Humidity"] = comp("Heat/Humidity", (maxOf(0.0, (tempF - 75.0) / 30.0 + if (humid > 75) 0.15 else 0.0) * 70).toFloat().coerceIn(0f, 100f), 0f, "°F", "${tempF}°/${humid}%")
 
         // Biometrics
-        val hrMag = if (bio.heartRate > 0) when { bio.heartRate > 120 -> 80f; bio.heartRate > 100 -> 50f; bio.heartRate in 1..54 -> 30f; else -> 5f } else 0f
-        c["Heart Rate"]    = comp("Heart Rate", hrMag, fluc(hrHistory) * 25f, "bpm", if (bio.heartRate > 0) "${bio.heartRate}" else "--")
-        val spO2Mag = if (bio.spO2 > 0) when { bio.spO2 < 88 -> 90f; bio.spO2 < 92 -> 65f; bio.spO2 < 95 -> 30f; bio.spO2 < 97 -> 10f; else -> 0f } else 0f
-        c["SpO2"]          = comp("SpO2", spO2Mag, fluc(spO2History) * 20f, "%", if (bio.spO2 > 0) "${bio.spO2}%" else "--")
-        val bpMag = if (bio.bpSys > 0) when { bio.bpSys > 160 -> 80f; bio.bpSys > 140 -> 50f; bio.bpSys > 130 -> 25f; bio.bpSys < 90 -> 60f; bio.bpSys < 100 -> 35f; else -> 5f } else 0f
-        c["Blood Pressure"]= comp("Blood Pressure", bpMag, fluc(bpHistory) * 22f, "mmHg", if (bio.bpSys > 0) "${bio.bpSys}/${bio.bpDia}" else "--")
-        val hrvMag = if (bio.rmssd > 0) when { bio.rmssd < 15 -> 75f; bio.rmssd < 25 -> 45f; bio.rmssd < 40 -> 20f; else -> 5f } else 0f
-        c["HRV (RMSSD)"]   = comp("HRV (RMSSD)", hrvMag, fluc(rmssdHistory) * 30f, "ms", if (bio.rmssd > 0) "${bio.rmssd.toInt()}" else "--")
-        val sleepMag = when { bio.sleepHours < 4 -> 60f; bio.sleepHours < 6 -> 35f; bio.sleepQuality < 40 -> 40f; bio.sleepQuality < 60 -> 20f; else -> 5f }
-        c["Sleep"]         = comp("Sleep", sleepMag, 0f, "hrs", if (bio.sleepHours > 0f) "${"%.1f".format(bio.sleepHours)}" else "--")
-        c["Stress Score"]  = comp("Stress Score", (bio.stressScore / 100f).coerceIn(0f, 1f) * 60f, 0f, "", if (bio.stressScore > 0) "${bio.stressScore}" else "--")
 
         // Weighted aggregate
-        val weights = mapOf(
-            "Kp Index" to 1.4f, "Solar Wind" to 1.0f, "IMF Bz" to 1.6f,
-            "Solar Flares" to 1.2f, "CME" to 1.3f, "Geomag Storm" to 1.5f,
-            "HSS/IPS" to 0.9f, "SEP" to 1.1f, "Hemi. Power" to 1.0f, "Schumann Res." to 0.8f,
-            "Barometric" to 1.2f, "Heat/Humidity" to 0.9f,
-            "Heart Rate" to 1.8f, "SpO2" to 1.9f, "Blood Pressure" to 1.8f,
-            "HRV (RMSSD)" to 1.6f, "Sleep" to 1.2f, "Stress Score" to 1.0f
+        val isDysauto = profile == AutonomicProfile.DYSAUTONOMIA
+        val weights = if (isDysauto) mapOf(
+            "Kp Index" to 3.5f, "Solar Wind" to 1.6f, "IMF Bz" to 4.0f,
+            "Solar Flares" to 1.6f, "CME" to 2.0f, "Geomag Storm" to 3.5f,
+            "HSS/IPS" to 1.4f, "SEP" to 1.5f, "Hemi. Power" to 1.6f,
+            "Schumann Res." to 1.8f, "Barometric" to 2.8f, "Heat/Humidity" to 1.6f
+        ) else mapOf(
+            "Kp Index" to 2.0f, "Solar Wind" to 1.2f, "IMF Bz" to 2.2f,
+            "Solar Flares" to 1.3f, "CME" to 1.5f, "Geomag Storm" to 2.0f,
+            "HSS/IPS" to 1.0f, "SEP" to 1.2f, "Hemi. Power" to 1.1f,
+            "Schumann Res." to 0.9f, "Barometric" to 1.4f, "Heat/Humidity" to 1.0f
         )
         var wSum = 0f; var wTotal = 0f
-        c.forEach { (k, v) -> val w = weights[k] ?: 1f; wSum += v.combined * w; wTotal += w }
-        val overall = (wSum / wTotal).coerceIn(0f, 100f).toInt()
+        c.forEach { (k, v) ->
+            val w = weights[k] ?: 1f
+            if (v.combined > 0f) { wSum += v.combined * w; wTotal += w }
+        }
+        val rawOverall = if (wTotal > 0f) wSum / wTotal else 0f
+        val baselineFloor = if (isDysauto) 18f else 0f
+        val overall = rawOverall.coerceAtLeast(baselineFloor).coerceIn(0f, 100f).toInt()
         val mag  = c.values.map { it.magnitude }.average().toFloat().toInt()
         val flucAvg = c.values.map { it.fluctuation }.average().toFloat().toInt()
 
-        val alertLevel = when {
-            overall >= 50 -> AlertLevel.BLUE
-            overall >= 25 -> AlertLevel.RED
-            overall >= 7  -> AlertLevel.YELLOW
+        val alertLevel = if (isDysauto) when {
+            overall >= 55 -> AlertLevel.BLUE
+            overall >= 35 -> AlertLevel.RED
+            overall >= 18 -> AlertLevel.YELLOW
+            else          -> AlertLevel.GREEN
+        } else when {
+            overall >= 65 -> AlertLevel.BLUE
+            overall >= 40 -> AlertLevel.RED
+            overall >= 20 -> AlertLevel.YELLOW
             else          -> AlertLevel.GREEN
         }
 
