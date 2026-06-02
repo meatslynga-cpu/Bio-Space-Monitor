@@ -195,6 +195,11 @@ data class AssessData(
 )
 
 // ── Settings ──────────────────────────────────────────────────────────────────
+enum class AutonomicProfile {
+    STANDARD,       // Healthy autonomic function
+    DYSAUTONOMIA    // POTS, IST, NCS, hyperadrenergic, vagal, etc.
+}
+
 data class AppSettings(
     val lat: Double = 40.71,
     val lon: Double = -74.01,
@@ -202,7 +207,8 @@ data class AppSettings(
     val useGps: Boolean = true,
     val watchMac: String = "",
     val geminiKey: String = "",
-    val username: String = ""
+    val username: String = "",
+    val autonomicProfile: AutonomicProfile = AutonomicProfile.STANDARD
 )
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
