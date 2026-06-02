@@ -174,7 +174,8 @@ fun AppNavigation(vm: MainViewModel) {
                     onWatchMac    = { vm.setWatchMac(it) },
                     onGeminiKey   = { vm.setGeminiKey(it) },
                     onUsername    = { vm.setUsername(it) },
-                    onRefresh     = { vm.refresh() }
+                    onRefresh     = { vm.refresh() },
+                    onProfileChange = { vm.onProfileChange(it) }
                 )
             }
         }

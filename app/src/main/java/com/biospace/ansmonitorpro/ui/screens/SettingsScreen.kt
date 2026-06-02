@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.biospace.ansmonitorpro.data.AppSettings
+import com.biospace.ansmonitorpro.data.AutonomicProfile
 import com.biospace.ansmonitorpro.ui.components.*
 import com.biospace.ansmonitorpro.ui.theme.AppColors
 
@@ -29,7 +30,8 @@ fun SettingsScreen(
     onWatchMac: (String) -> Unit,
     onGeminiKey: (String) -> Unit,
     onUsername: (String) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onProfileChange: (AutonomicProfile) -> Unit
 ) {
     var latInput   by remember { mutableStateOf(settings.lat.toString()) }
     var lonInput   by remember { mutableStateOf(settings.lon.toString()) }
@@ -46,6 +48,32 @@ fun SettingsScreen(
         SectionCard(borderColor = AppColors.Cyan.copy(.3f)) {
             SectionHeader("SETTINGS", AppColors.Cyan)
             SubLabel("PREFERENCES · LOCATION · WATCH · API KEYS")
+        }
+
+        // ── Autonomic Profile ─────────────────────────────────────────────
+        SectionCard {
+            SectionHeader("AUTONOMIC PROFILE", AppColors.Magenta)
+            SubLabel("AFFECTS ANS LOAD SCORING SENSITIVITY")
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(AutonomicProfile.STANDARD to "STANDARD", AutonomicProfile.DYSAUTONOMIA to "DYSAUTONOMIA")
+                .forEach { (prof, label) ->
+                    val selected = settings.autonomicProfile == prof
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) AppColors.Magenta.copy(alpha=0.2f) else AppColors.CardBg)
+                            .border(1.dp, if (selected) AppColors.Magenta else AppColors.Divider, RoundedCornerShape(8.dp))
+                            .clickable { onProfileChange(prof) }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, fontSize = 10.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selected) AppColors.Magenta else AppColors.TextDim,
+                            letterSpacing = 1.sp)
+                    }
+                }
+            }
         }
 
         // ── Location ──────────────────────────────────────────────────────
@@ -142,7 +170,10 @@ fun SettingsScreen(
         SectionCard {
             SectionHeader("DISPLAY NAME", AppColors.TextSecondary)
             Spacer(Modifier.height(8.dp))
-            BioField("YOUR NAME / CALLSIGN", userInput, { userInput = it }, Modifier.fillMaxWidth())
+            BioField("YOUR NAME / CALLSIGN", userInput, {
+                val filtered = it.uppercase().filter { c -> c.isLetterOrDigit() || c == '-' || c == '_' }.take(12)
+                userInput = filtered
+            }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
             SaveButton("SAVE NAME") { onUsername(userInput) }
         }
