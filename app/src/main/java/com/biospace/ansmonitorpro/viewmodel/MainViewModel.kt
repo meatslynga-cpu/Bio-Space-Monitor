@@ -39,7 +39,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             watchRepo.bio.collect { bio ->
                 _uiState.update { s ->
-                    val ans = repo.computeAns(s.space, s.schumann, s.env, bio)
+                    val ans = repo.computeAns(s.space, s.schumann, s.env, bio, s.settings.autonomicProfile)
                     s.copy(bio = bio, ans = ans)
                 }
             }
@@ -76,6 +76,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { saveSettings() }
     }
 
+    fun onProfileChange(profile: AutonomicProfile) {
+        _uiState.update { it.copy(settings = it.settings.copy(autonomicProfile = profile)) }
+        val current = _uiState.value
+        val ans = repo.computeAns(current.space, current.schumann, current.env, current.bio, profile)
+        _uiState.update { it.copy(ans = ans) }
+    }
+
     fun logSymptom(s: SymptomLog) {
         _uiState.update { it.copy(symptomLogs = (listOf(s) + it.symptomLogs).take(100)) }
     }
@@ -89,7 +96,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val env    = repo.fetchEnvironment(s.lat, s.lon, s.locationName)
                 val sr     = repo.deriveSchumann(space, env)
                 val bio    = watchRepo.bio.value
-                val ans    = repo.computeAns(space, sr, env, bio)
+                val ans    = repo.computeAns(space, sr, env, bio, _uiState.value.settings.autonomicProfile)
                 val assess = repo.computeAssessment(space, sr, env, ans)
                 val alerts = repo.fetchAlerts()
                 _uiState.update {
