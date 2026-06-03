@@ -248,5 +248,27 @@ data class AppState(
     val error: String? = null,
     val lastUpdated: String = "",
     val reportOutput: String = "",
-    val reportLoading: Boolean = false
+    val reportLoading: Boolean = false,
+    val stormForecast: SolarStormForecast = SolarStormForecast()
+)
+
+// ── Solar Storm Forecast ──────────────────────────────────────────────────────
+data class SolarStormForecast(
+    val hasThreat: Boolean = false,
+    val severityScore: Int = 0,
+    val severityLabel: String = "NONE",
+    val estimatedArrivalHrs: Int = 999,
+    val arrivalLabel: String = "No storm inbound",
+    val peakDurationHrs: Int = 0,
+    val dissipationHrs: Int = 0,
+    val drivers: List<String> = emptyList(),
+    val cmeCount: Int = 0,
+    val cmeMaxSpeed: Double = 0.0,
+    val flareMaxClass: String = "B",
+    val coronalHoleActive: Boolean = false,
+    val hssContributing: Boolean = false,
+    val expectedKpMax: Double = 0.0,
+    val gStormLevel: String = "G0",
+    val narrative: String = "",
+    val timestamp: String = ""
 )

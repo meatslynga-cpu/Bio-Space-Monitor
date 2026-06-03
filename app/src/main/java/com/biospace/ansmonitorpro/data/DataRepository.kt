@@ -489,4 +489,115 @@ class DataRepository {
         val mean = vals.average().toFloat()
         return if (mean == 0f) 0f else (diffs.average().toFloat() / (mean + 0.001f)).coerceIn(0f, 1f)
     }
+
+    // ── Solar Storm Forecast ─────────────────────────────────────────────
+    suspend fun fetchSolarStormForecast(space: SpaceWeatherData): SolarStormForecast = withContext(Dispatchers.IO) {
+        val today = dateStr(0); val week = dateStr(7)
+        val chsR = runCatching { donki.getCoronalHoles(week, today) }
+        val chs = chsR.getOrNull()
+
+        val drivers = mutableListOf<String>()
+        var severityScore = 0
+        var arrivalHrs = 999
+        var peakDur = 0
+        var dissHrs = 0
+        var coronalHoleActive = false
+
+        // CME contribution
+        val cmeCount = if (space.cmeSpeed > 300) 1 else 0
+        val cmeSpeed = space.cmeSpeed
+        if (cmeSpeed > 2000) { severityScore += 50; drivers.add("Extreme CME (${cmeSpeed.toInt()} km/s)") }
+        else if (cmeSpeed > 1500) { severityScore += 40; drivers.add("Major CME (${cmeSpeed.toInt()} km/s)") }
+        else if (cmeSpeed > 1000) { severityScore += 30; drivers.add("Fast CME (${cmeSpeed.toInt()} km/s)") }
+        else if (cmeSpeed > 600)  { severityScore += 20; drivers.add("Moderate CME (${cmeSpeed.toInt()} km/s)") }
+        else if (cmeSpeed > 300)  { severityScore += 8;  drivers.add("Slow CME (${cmeSpeed.toInt()} km/s)") }
+        if (space.cmeArrivalHrs < 999) arrivalHrs = space.cmeArrivalHrs
+
+        // Flare contribution
+        val flareMax = space.flares.maxOfOrNull { f ->
+            when { f.flareClass.startsWith("X") -> 4; f.flareClass.startsWith("M") -> 3
+                   f.flareClass.startsWith("C") -> 2; else -> 1 }
+        } ?: 0
+        val flareMaxClass = when (flareMax) { 4 -> "X"; 3 -> "M"; 2 -> "C"; else -> "B" }
+        when (flareMax) {
+            4 -> { severityScore += 25; drivers.add("X-class flare") }
+            3 -> { severityScore += 15; drivers.add("M-class flare") }
+            2 -> { severityScore += 5;  drivers.add("C-class flare") }
+        }
+        if (space.flares.any { it.hasCme && it.flareClass.startsWith("X") }) { severityScore += 15; drivers.add("X-flare with CME") }
+        else if (space.flares.any { it.hasCme }) { severityScore += 8; drivers.add("Flare with CME") }
+
+        // HSS contribution
+        if (space.hssActive) {
+            severityScore += 12; drivers.add("High-speed solar wind stream")
+            if (arrivalHrs == 999) arrivalHrs = 24
+        }
+
+        // SEP contribution
+        if (space.sepActive) { severityScore += 20; drivers.add("Solar energetic particle event") }
+
+        // GST active
+        if (space.gstActive) { severityScore += 15; drivers.add("Geomagnetic storm in progress") }
+
+        // Coronal hole
+        if (!chs.isNullOrEmpty()) {
+            coronalHoleActive = true; severityScore += 10; drivers.add("Coronal hole stream (${chs.size} active)")
+            if (arrivalHrs == 999) arrivalHrs = 48
+        }
+
+        // IMF Bz southward amplifies
+        if (space.bz < -10) { severityScore += 20; drivers.add("Strongly southward IMF (${space.bz} nT)") }
+        else if (space.bz < -5) { severityScore += 10; drivers.add("Southward IMF (${space.bz} nT)") }
+
+        // Expected Kp
+        val expectedKp = (severityScore / 10.0).coerceIn(0.0, 9.0)
+        val gStormLevel = when { expectedKp >= 9 -> "G5"; expectedKp >= 8 -> "G4"; expectedKp >= 7 -> "G3"; expectedKp >= 6 -> "G2"; expectedKp >= 5 -> "G1"; else -> "G0" }
+
+        // Duration estimates based on severity
+        if (severityScore > 0) {
+            peakDur = when { severityScore >= 60 -> 24; severityScore >= 40 -> 18; severityScore >= 20 -> 12; else -> 6 }
+            dissHrs = when { severityScore >= 60 -> 72; severityScore >= 40 -> 48; severityScore >= 20 -> 36; else -> 24 }
+        }
+
+        val severityLabel = when { severityScore >= 70 -> "EXTREME"; severityScore >= 50 -> "SEVERE"; severityScore >= 35 -> "STRONG"; severityScore >= 20 -> "MODERATE"; severityScore >= 8 -> "MINOR"; else -> "NONE" }
+        val arrivalLabel = when {
+            arrivalHrs == 999 -> "No storm inbound"
+            arrivalHrs <= 0   -> "Storm arriving now"
+            arrivalHrs < 6    -> "Arrival imminent (<6 hrs)"
+            arrivalHrs < 24   -> "Arrival in ~${arrivalHrs}h"
+            else              -> "Arrival in ~${arrivalHrs / 24}d ${arrivalHrs % 24}h"
+        }
+
+        val narrative = buildString {
+            if (severityScore == 0) { append("No significant solar storm threat detected at this time.") }
+            else {
+                append("$severityLabel solar storm conditions. ")
+                append("Primary drivers: ${drivers.take(3).joinToString(", ")}. ")
+                if (arrivalHrs < 999) append("Estimated arrival: $arrivalLabel. ")
+                append("Peak duration ~${peakDur}h, full dissipation ~${dissHrs}h after onset. ")
+                append("Expected max Kp: ${"%.1f".format(expectedKp)} ($gStormLevel). ")
+                if (space.bz < -5) append("Southward IMF will enhance storm intensity significantly.")
+            }
+        }
+
+        SolarStormForecast(
+            hasThreat = severityScore >= 8,
+            severityScore = severityScore.coerceIn(0, 100),
+            severityLabel = severityLabel,
+            estimatedArrivalHrs = arrivalHrs,
+            arrivalLabel = arrivalLabel,
+            peakDurationHrs = peakDur,
+            dissipationHrs = dissHrs,
+            drivers = drivers,
+            cmeCount = cmeCount,
+            cmeMaxSpeed = cmeSpeed,
+            flareMaxClass = flareMaxClass,
+            coronalHoleActive = coronalHoleActive,
+            hssContributing = space.hssActive,
+            expectedKpMax = expectedKp,
+            gStormLevel = gStormLevel,
+            narrative = narrative,
+            timestamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+        )
+    }
 }

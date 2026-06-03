@@ -54,6 +54,11 @@ interface DonkiApi {
         @Query("startDate") start: String, @Query("endDate") end: String,
         @Query("api_key") key: String = "DEMO_KEY"
     ): List<Map<String, Any>>
+    @GET("WS/get/CHS")
+    suspend fun getCoronalHoles(
+        @Query("startDate") start: String, @Query("endDate") end: String,
+        @Query("api_key") key: String = "DEMO_KEY"
+    ): List<Map<String, Any>>
 }
 
 interface OpenMeteoApi {

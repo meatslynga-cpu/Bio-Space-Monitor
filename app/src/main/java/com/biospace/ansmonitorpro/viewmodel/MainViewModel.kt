@@ -100,10 +100,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val ans    = repo.computeAns(space, sr, env, bio, _uiState.value.settings.autonomicProfile)
                 val assess = repo.computeAssessment(space, sr, env, ans)
                 val alerts = repo.fetchAlerts()
+                val storm  = repo.fetchSolarStormForecast(space)
                 _uiState.update {
                     it.copy(
                         space = space, env = env, schumann = sr,
                         ans = ans, assess = assess, alerts = alerts,
+                        stormForecast = storm,
                         isLoading = false, lastUpdated = space.timestamp,
                         settings = it.settings.copy(locationName = env.cityName)
                     )

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.biospace.ansmonitorpro.ui.theme.AppColors
 import com.biospace.ansmonitorpro.viewmodel.MainViewModel
+import com.biospace.ansmonitorpro.data.SolarStormForecast
 
 private data class Tab(val id: String, val label: String)
 private val TABS = listOf(
@@ -33,7 +34,8 @@ private val TABS = listOf(
     Tab("symptoms", "LOG"),
     Tab("report",   "REPORT"),
     Tab("chat",     "CHAT"),
-    Tab("settings", "⚙")
+    Tab("settings", "⚙"),
+    Tab("storm",    "STORM")
 )
 
 @Composable
@@ -169,6 +171,7 @@ fun AppNavigation(vm: MainViewModel) {
                     kp          = state.space.kp,
                     lastUpdated = state.lastUpdated
                 )
+                "storm"    -> StormForecastScreen(state.stormForecast)
                 "settings" -> SettingsScreen(
                     settings      = state.settings,
                     onGpsToggle   = { vm.setUseGps(it) },
