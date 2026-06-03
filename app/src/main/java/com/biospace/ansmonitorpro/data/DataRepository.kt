@@ -42,7 +42,7 @@ class DataRepository {
         val kpR   = async { runCatching { noaa.getKp() } }
         val plaR  = async { runCatching { noaa.getSolarWindPlasma() } }
         val magR  = async { runCatching { noaa.getSolarWindMag() } }
-        val hpR   = async { runCatching { noaa.getHemiPower() } }
+        val hpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt").build()).execute().body?.string() ?: "" } }
         val flrR  = async { runCatching { donki.getFlares(week, today) } }
         val cmeR  = async { runCatching { donki.getCME(week, today) } }
         val gstR  = async { runCatching { donki.getGST(week, today) } }

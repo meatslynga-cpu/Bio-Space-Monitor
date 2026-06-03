@@ -34,8 +34,8 @@ private val TABS = listOf(
     Tab("symptoms", "LOG"),
     Tab("report",   "REPORT"),
     Tab("chat",     "CHAT"),
-    Tab("settings", "⚙"),
-    Tab("storm",    "STORM")
+    Tab("storm",    "STORM"),
+    Tab("settings", "⚙")
 )
 
 @Composable
