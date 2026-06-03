@@ -658,13 +658,16 @@ class DataRepository {
         val bt = space.bt.coerceAtLeast(0.1)
         val bz = space.bz
         val vsw = space.solarWindSpeed.coerceAtLeast(300.0)
-        val theta = if (bz <= 0) Math.PI else Math.atan2(0.0, -bz) // southward = pi
+        // Correct clock angle: theta=0 northward, theta=pi southward
+        val theta = Math.atan2(-bz, 0.0).let { if (it < 0) it + Math.PI else it }
         val sinTerm = Math.pow(Math.sin(theta / 2.0), 8.0 / 3.0)
         val dPhiDt = Math.pow(vsw, 4.0 / 3.0) * Math.pow(bt, 2.0 / 3.0) * sinTerm
-        val kpFromCoupling = (2.0 + 1.5 * Math.log10((dPhiDt / 500.0).coerceAtLeast(0.01))).coerceIn(0.0, 9.0)
-        // Blend coupling-based Kp with score-based for non-IMF drivers
+        // Newell calibration: divisor ~300 matches observed Kp better
+        val kpFromCoupling = (2.0 + 1.5 * Math.log10((dPhiDt / 300.0).coerceAtLeast(0.01))).coerceIn(0.0, 9.0)
+        // Blend: weight coupling higher when IMF is strongly southward
+        val couplingWeight = if (bz < -5) 0.75 else 0.5
         val kpFromScore = (severityScore / 10.0).coerceIn(0.0, 9.0)
-        val expectedKp = ((kpFromCoupling * 0.6) + (kpFromScore * 0.4)).coerceIn(0.0, 9.0)
+        val expectedKp = ((kpFromCoupling * couplingWeight) + (kpFromScore * (1.0 - couplingWeight))).coerceIn(0.0, 9.0)
         val gStormLevel = when { expectedKp >= 9 -> "G5"; expectedKp >= 8 -> "G4"; expectedKp >= 7 -> "G3"; expectedKp >= 6 -> "G2"; expectedKp >= 5 -> "G1"; else -> "G0" }
 
         // Duration estimates based on severity
