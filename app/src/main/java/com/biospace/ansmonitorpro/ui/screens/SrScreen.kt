@@ -124,40 +124,37 @@ fun SrScreen(data: SchumannData) {
             }
         }
 
-        // ── Harmonic ANS pathway table ────────────────────────────────────
+        // ── Active harmonic card ──────────────────────────────────────────
         SectionCard {
-            SectionHeader("HARMONIC → ANS PATHWAY TABLE")
-            Spacer(Modifier.height(4.dp))
-            Row(Modifier.fillMaxWidth()) {
-                Text("f (Hz)", fontSize = 8.sp, color = AppColors.TextDim, modifier = Modifier.width(42.dp))
-                Text("RANGE", fontSize = 8.sp, color = AppColors.TextDim, modifier = Modifier.width(58.dp))
-                Text("BRAIN", fontSize = 8.sp, color = AppColors.TextDim, modifier = Modifier.width(70.dp))
-                Text("PRIMARY ANS EFFECT", fontSize = 8.sp, color = AppColors.TextDim)
+            SectionHeader("ACTIVE HARMONIC BAND", AppColors.Gold)
+            Spacer(Modifier.height(10.dp))
+            // Determine active harmonic from fundamental frequency
+            val hz = data.fundamentalHz
+            val (band, brainState, effect, bandColor) = when {
+                hz < 9.5   -> listOf("f₁ · 7.83 Hz", "Theta/Alpha", "HRV coherence · parasympathetic baseline · sleep architecture · circadian anchor", AppColors.Gold)
+                hz < 16.5  -> listOf("f₂ · 14.3 Hz", "Low Beta / SMR", "Motor cortex excitability · cortisol sensitization · jaw clenching · muscle tension", AppColors.Magenta)
+                hz < 23.0  -> listOf("f₃ · 20.8 Hz", "Mid Beta", "Hypervigilance · thought loop amplification · sensory filter degradation · anxiety tone", AppColors.Cyan)
+                hz < 29.0  -> listOf("f₄ · 26.4 Hz", "High Beta", "Adrenaline axis · tachycardia · startle amplification · vagal tone suppression", AppColors.Orange)
+                hz < 36.0  -> listOf("f₅ · 33.0 Hz", "Gamma Boundary", "Sensory binding disruption · tinnitus · visual artifacts · temporal disorientation", AppColors.Red)
+                else       -> listOf("f₆ · 39.5 Hz", "Gamma", "Pineal axis · melatonin suppression · circadian phase shift · compounded sleep debt", AppColors.MagentaDim)
             }
-            Box(Modifier.fillMaxWidth().height(0.5.dp).background(AppColors.Divider))
-            Spacer(Modifier.height(4.dp))
-            val harmonics = listOf(
-                HarmonicRow("7.83",  "7.0–8.5",  "Theta/α",      AppColors.Gold,    "HRV coherence · Sleep architecture · Parasympathetic baseline · Circadian rhythm anchor"),
-                HarmonicRow("14.3",  "13–15",    "Low Beta/SMR", AppColors.Magenta,  "Motor cortex excitability · Cortisol axis sensitization · Jaw clenching · Muscle tension"),
-                HarmonicRow("20.8",  "19–22",    "Mid Beta",     AppColors.Cyan,     "Hypervigilance · Thought loop amplification · Sensory filter degradation · Anxiety tone"),
-                HarmonicRow("26.4",  "25–28",    "High Beta",    AppColors.Orange,   "Adrenaline axis · Tachycardia · Startle amplification · Vagal tone suppression"),
-                HarmonicRow("33.0",  "32–35",    "Gamma boundary",AppColors.Red,     "Sensory binding disruption · Tinnitus · Visual processing artifacts · Temporal disorientation"),
-                HarmonicRow("39.5",  "38–41",    "Gamma",        AppColors.MagentaDim,"Pineal axis · Melatonin suppression · Circadian phase shift · Compounded sleep debt"),
-            )
-            harmonics.forEach { h ->
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Text(h.freq, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = h.color,
-                        modifier = Modifier.width(42.dp))
-                    Text(h.range, fontSize = 10.sp, color = AppColors.TextSecondary,
-                        modifier = Modifier.width(58.dp))
-                    Text(h.brain, fontSize = 10.sp, color = AppColors.TextSecondary,
-                        modifier = Modifier.width(70.dp))
-                    Text(h.effect, fontSize = 10.sp, color = AppColors.TextDim, lineHeight = 14.sp,
-                        modifier = Modifier.weight(1f))
+            val bandColorTyped = bandColor as Color
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(
+                    Modifier.clip(RoundedCornerShape(8.dp))
+                        .background(bandColorTyped.copy(.15f))
+                        .border(1.dp, bandColorTyped, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Text(band as String, fontSize = 16.sp, fontWeight = FontWeight.Black, color = bandColorTyped)
                 }
-                Box(Modifier.fillMaxWidth().height(0.5.dp).background(AppColors.Divider))
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(brainState as String, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
+                    Text("Drift: ${if (data.freqDrift >= 0) "+" else ""}${"%.3f".format(data.freqDrift)} Hz from baseline", fontSize = 10.sp, color = AppColors.TextSecondary)
+                }
             }
+            Spacer(Modifier.height(10.dp))
+            Text(effect as String, fontSize = 11.sp, color = AppColors.TextDim, lineHeight = 17.sp)
         }
         Spacer(Modifier.height(80.dp))
     }

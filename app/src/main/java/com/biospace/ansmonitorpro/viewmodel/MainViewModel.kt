@@ -147,7 +147,8 @@ CURRENT DATA:
 ANS Burden: ${b.loadIndex}% | Alert: ${b.alertLevel.name} | Magnitude: ${b.magnitude}% | Fluctuation: ${b.fluctuation}%
 Kp: ${"%.1f".format(sw.kp)} | Solar Wind: ${sw.solarWindSpeed.toInt()} km/s | IMF Bz: ${"%.1f".format(sw.bz)} nT (${sw.bzLabel})
 Flares: ${sw.flares.size} | CME: ${sw.cmeSpeed.toInt()} km/s arrival ${sw.cmeArrivalHrs}hrs | GST: ${sw.gstActive} | HSS: ${sw.hssActive}
-Hemispheric Power: ${sw.hemisphericPower.toInt()} GW (${sw.fountainDumping}) | SR: ${s.schumann.fundamentalHz} Hz
+Hemispheric Power: ${sw.hemisphericPower.toInt()} GW (${sw.fountainDumping})
+SR Fundamental: ${s.schumann.fundamentalHz} Hz (drift ${s.schumann.freqDrift > 0? "+" : ""}${"%.3f".format(s.schumann.freqDrift)} Hz from 7.83) | Amplitude: ${"%.2f".format(s.schumann.amplitudePt)} pT | Q-Factor: ${"%.1f".format(s.schumann.qFactor)} | Coherence: ${s.schumann.coherenceScore}% (${s.schumann.coherenceLabel}) | Cavity: ${s.schumann.cavityHeight} | TEC: ${"%.1f".format(s.schumann.tecLocal)} TECU (${"%.1f".format(s.schumann.tecDelta)} from median)
 Weather: ${s.env.tempF}°F | Humidity: ${s.env.humidity}% | Pressure: ${s.env.pressureHpa.toInt()} hPa | ΔP: ${"%.1f".format(s.env.pressureDelta)} hPa/hr
 Heart Rate: ${if (bio.heartRate > 0) "${bio.heartRate} bpm (${bio.hrSource})" else "not recorded"}
 BP: ${if (bio.bpSys > 0) "${bio.bpSys}/${bio.bpDia} mmHg" else "not recorded"}
@@ -156,7 +157,7 @@ HRV RMSSD: ${if (bio.rmssd > 0f) "${bio.rmssd.toInt()} ms" else "not recorded"}
 Sleep: ${if (bio.sleepHours > 0f) "${bio.sleepHours} hrs" else "not recorded"}
 Top burden drivers: ${b.breakdown.entries.sortedByDescending { it.value.combined }.take(5).joinToString(", ") { "${it.key} (${it.value.combined.toInt()}%)" }}
 
-Sections: 1) Overall ANS Assessment  2) Space & Environmental Drivers  3) Biometric Findings  4) Fluctuation Analysis (critical for dysautonomia — oscillation more harmful than stable levels)  5) Expected Symptoms Next 12-24hrs  6) Mitigation Strategies  7) 48hr Outlook"""
+Sections: 1) Overall ANS Assessment  2) Space & Environmental Drivers  3) Schumann Resonance Impact (frequency drift effect on HRV coherence, sleep, and vagal tone — note active harmonic band and ANS pathway)  4) Biometric Findings  5) Fluctuation Analysis (critical for dysautonomia — oscillation more harmful than stable levels)  6) Expected Symptoms Next 12-24hrs  7) Mitigation Strategies  8) 48hr Outlook"""
     }
 
     private suspend fun callGemini(key: String, prompt: String): String = withContext(Dispatchers.IO) {
