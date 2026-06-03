@@ -352,8 +352,8 @@ class DataRepository {
             if (space.hssActive && bz < -3) bonus += 8f                           // HSS + southward combo
             if (space.sepActive && space.hssActive) bonus += 6f                   // SEP + HSS combo
             if (q < 3.5) bonus += (3.5 - q).toFloat() * 4f
-            if (kotlin.math.abs(sr.freqDrift) > 0.2) bonus += (kotlin.math.abs(sr.freqDrift) * 12f).coerceIn(0f, 10f)
-            if (amp > 2.0) bonus += 6f else if (amp < 0.6) bonus += 4f
+            if (kotlin.math.abs(sr.freqDrift) > 0.2) bonus += (kotlin.math.abs(sr.freqDrift).toFloat() * 12f).coerceIn(0f, 10f)
+            if (amp > 2.0) bonus += 6f else if (amp < 0.6f) bonus += 4f
             bonus.coerceIn(0f, 55f)
         } else {
             var bonus = 0f
