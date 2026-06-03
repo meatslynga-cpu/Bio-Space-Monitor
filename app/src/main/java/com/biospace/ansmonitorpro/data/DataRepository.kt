@@ -68,7 +68,7 @@ class DataRepository {
             val arr = org.json.JSONArray(kpRaw ?: "[]")
             for (i in 0 until arr.length()) {
                 val row = arr.getJSONObject(i)
-                val v = row.optDouble("kp_index", -1.0)
+                val v = row.optDouble("k_index", -1.0)
                 if (v >= 0) kpHist.add(v)
             }
             if (kpHist.isNotEmpty()) kp = kpHist.last()
