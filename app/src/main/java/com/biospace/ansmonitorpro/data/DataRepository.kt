@@ -131,15 +131,24 @@ class DataRepository {
 
         // CME
         var cmeSpeed = 300.0; var cmeAngle = 60.0; var cmeArrival = 999; var cmeDir = "Non-Halo"
-        cmeData?.lastOrNull()?.let {
-            val cm = it as? Map<*, *>
-            cmeSpeed = cm?.get("speed")?.toString()?.toDoubleOrNull() ?: cmeSpeed
-            cmeAngle = cm?.get("halfAngle")?.toString()?.toDoubleOrNull() ?: cmeAngle
+        // CME — count all inbound CMEs (not yet passed Earth), use fastest for arrival
+        val allCmes = cmeData?.mapNotNull { it as? Map<*, *> } ?: emptyList()
+        val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        val now = System.currentTimeMillis()
+        val inboundCmes = allCmes.filter {
+            val t = it["time21_5"]?.toString()
+            if (t != null) runCatching { sdf2.parse(t)!!.time > now }.getOrDefault(false) else false
+        }
+        val cmeCount_inbound = inboundCmes.size
+        val fastestCme = inboundCmes.maxByOrNull { it["speed"]?.toString()?.toDoubleOrNull() ?: 0.0 }
+            ?: allCmes.lastOrNull()
+        fastestCme?.let {
+            cmeSpeed = it["speed"]?.toString()?.toDoubleOrNull() ?: cmeSpeed
+            cmeAngle = it["halfAngle"]?.toString()?.toDoubleOrNull() ?: cmeAngle
             cmeDir = if (cmeAngle < 20) "Full Halo" else if (cmeAngle < 40) "Partial Halo" else "Non-Halo"
-            cm?.get("time21_5")?.toString()?.let { t ->
+            it["time21_5"]?.toString()?.let { t ->
                 runCatching {
-                    val sdf2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-                    val diff = sdf2.parse(t)!!.time - System.currentTimeMillis()
+                    val diff = sdf2.parse(t)!!.time - now
                     cmeArrival = maxOf(0, (diff / 3_600_000).toInt())
                 }
             }
@@ -180,6 +189,7 @@ class DataRepository {
             cmeSpeed = cmeSpeed,
             cmeArrivalHrs = cmeArrival,
             cmeDirection = cmeDir,
+                          cmeCount = cmeCount_inbound,
             timestamp = ts
         )
     }
@@ -516,14 +526,17 @@ class DataRepository {
         var coronalHoleActive = false
 
         val cmeSpeed = space.cmeSpeed
-        val cmeCount = if (cmeSpeed > 300) 1 else 0
+        val cmeCount = space.cmeCount
 
         // ── 1. CME Arrival: drag-based model (Vrsnak et al. 2013) ────────────────
         // t_arrival = distance / effective_velocity, corrected for solar wind drag
         // Simplified: t(hrs) = 1.0 / (0.0054 * v^0.65) for v in km/s, dist ~1AU
         val solarWindBg = space.solarWindSpeed.coerceAtLeast(300.0)
         var arrivalHrs = if (cmeSpeed > 300) {
-            val dragCorrected = cmeSpeed - 0.2 * (cmeSpeed - solarWindBg)
+            // Reduce drag when multiple CMEs are stacked — each preceding CME pre-conditions
+            // the solar wind, reducing deceleration on the fastest following CME
+            val stackFactor = when { cmeCount >= 3 -> 0.05; cmeCount == 2 -> 0.07; else -> 0.1 }
+            val dragCorrected = cmeSpeed - stackFactor * (cmeSpeed - solarWindBg)
             val tDays = 149_600_000.0 / (dragCorrected * 86400.0)
             (tDays * 24).toInt().coerceIn(12, 96)
         } else 999
@@ -566,6 +579,7 @@ class DataRepository {
         if (space.hssActive) {
             severityScore += 12; drivers.add("High-speed solar wind stream")
             if (arrivalHrs == 999) arrivalHrs = 24
+            coronalHoleActive = true  // HSS originates from coronal holes by definition
         }
 
         // SEP contribution
@@ -608,7 +622,7 @@ class DataRepository {
             dissHrs = when { severityScore >= 60 -> 72; severityScore >= 40 -> 48; severityScore >= 20 -> 36; else -> 24 }
         }
 
-        val severityLabel = when { severityScore >= 70 -> "EXTREME"; severityScore >= 50 -> "SEVERE"; severityScore >= 35 -> "STRONG"; severityScore >= 20 -> "MODERATE"; severityScore >= 8 -> "MINOR"; else -> "NONE" }
+        val severityLabel = when { severityScore >= 85 -> "EXTREME"; severityScore >= 70 -> "SEVERE"; severityScore >= 50 -> "STRONG"; severityScore >= 35 -> "MODERATE"; severityScore >= 20 -> "MINOR"; else -> "NONE" }
         val arrivalLabel = when {
             arrivalHrs == 999 -> "No storm inbound"
             arrivalHrs <= 0   -> "Storm arriving now"
