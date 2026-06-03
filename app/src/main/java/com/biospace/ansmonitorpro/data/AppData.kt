@@ -186,22 +186,6 @@ data class SymptomLog(
     val burdenAtLog: Int = 0,
     val alertLevelAtLog: String = "GREEN"
 )
-    val timestamp: Long = System.currentTimeMillis(),
-    val lightheadedness: Int = 0,
-    val heartPounding: Int = 0,
-    val fatigue: Int = 0,
-    val brainFog: Int = 0,
-    val chestPain: Int = 0,
-    val nausea: Int = 0,
-    val shortBreath: Int = 0,
-    val tremors: Int = 0,
-    val blurredVision: Int = 0,
-    val headache: Int = 0,
-    val notes: String = "",
-    val kpAtLog: Double = 0.0,
-    val burdenAtLog: Int = 0
-)
-
 // ── Alert entries (NOAA) ──────────────────────────────────────────────────────
 data class AlertEntry(
     val code: String,
