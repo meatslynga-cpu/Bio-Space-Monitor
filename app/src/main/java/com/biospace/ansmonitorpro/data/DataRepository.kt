@@ -336,7 +336,32 @@ class DataRepository {
         }
         val rawOverall = if (wTotal > 0f) wSum / wTotal else 0f
         val baselineFloor = if (isDysauto) 18f else 0f
-        val overall = rawOverall.coerceAtLeast(baselineFloor).coerceIn(0f, 100f).toInt()
+
+        // Cumulative event stacking — quiet Kp doesn't cancel active events
+        val eventBonus = if (isDysauto) {
+            var bonus = 0f
+            if (bz < -3)  bonus += (kotlin.math.abs(bz) - 3).toFloat() * 3.5f   // southward Bz penalty
+            if (bz < -5)  bonus += 8f                                              // sustained south
+            if (space.hssActive) bonus += 12f                                      // HSS stream
+            if (space.sepActive) bonus += 10f                                      // SEP event
+            if (space.ipsCount >= 2) bonus += 8f                                   // multiple IPS
+            else if (space.ipsCount == 1) bonus += 4f
+            if (space.gstActive) bonus += 10f                                      // active GST
+            if (space.flares.any { it.flareClass.startsWith("M") }) bonus += 6f   // M-class flares
+            if (space.flares.any { it.flareClass.startsWith("X") }) bonus += 12f  // X-class flares
+            if (space.hssActive && bz < -3) bonus += 8f                           // HSS + southward combo
+            if (space.sepActive && space.hssActive) bonus += 6f                   // SEP + HSS combo
+            bonus.coerceIn(0f, 45f)
+        } else {
+            var bonus = 0f
+            if (bz < -5) bonus += (kotlin.math.abs(bz) - 5).toFloat() * 1.5f
+            if (space.hssActive) bonus += 5f
+            if (space.sepActive) bonus += 5f
+            if (space.gstActive) bonus += 8f
+            bonus.coerceIn(0f, 25f)
+        }
+
+        val overall = (rawOverall + eventBonus).coerceAtLeast(baselineFloor).coerceIn(0f, 100f).toInt()
         val mag  = c.values.map { it.magnitude }.average().toFloat().toInt()
         val flucAvg = c.values.map { it.fluctuation }.average().toFloat().toInt()
 
