@@ -185,7 +185,7 @@ fun SymptomsScreen(
                 listOf("SEDENTARY","LIGHT","NORMAL","EXERTIONAL").forEach { level ->
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
-                            .background(if (activityLevel == level) AppColors.Cyan.copy(.25f) else AppColors.Surface)
+                            .background(if (activityLevel == level) AppColors.Cyan.copy(.25f) else AppColors.CardBg)
                             .border(1.dp, if (activityLevel == level) AppColors.Cyan else AppColors.TextDim.copy(.3f), RoundedCornerShape(8.dp))
                             .clickable { activityLevel = level }
                             .padding(vertical = 8.dp),
@@ -200,7 +200,7 @@ fun SymptomsScreen(
                 listOf("<2hrs","2-4hrs","4-6hrs","Most of day").forEach { dur ->
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
-                            .background(if (activeDuration == dur) AppColors.Gold.copy(.25f) else AppColors.Surface)
+                            .background(if (activeDuration == dur) AppColors.Gold.copy(.25f) else AppColors.CardBg)
                             .border(1.dp, if (activeDuration == dur) AppColors.Gold else AppColors.TextDim.copy(.3f), RoundedCornerShape(8.dp))
                             .clickable { activeDuration = dur }
                             .padding(vertical = 8.dp),
