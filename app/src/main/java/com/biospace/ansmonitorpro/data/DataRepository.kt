@@ -578,6 +578,8 @@ class DataRepository {
         val gStormLevel = when { expectedKp >= 9 -> "G5"; expectedKp >= 8 -> "G4"; expectedKp >= 7 -> "G3"; expectedKp >= 6 -> "G2"; expectedKp >= 5 -> "G1"; else -> "G0" }
 
         // Duration estimates based on severity
+        var peakDur = 0
+        var dissHrs = 0
         if (severityScore > 0) {
             peakDur = when { severityScore >= 60 -> 24; severityScore >= 40 -> 18; severityScore >= 20 -> 12; else -> 6 }
             dissHrs = when { severityScore >= 60 -> 72; severityScore >= 40 -> 48; severityScore >= 20 -> 36; else -> 24 }
