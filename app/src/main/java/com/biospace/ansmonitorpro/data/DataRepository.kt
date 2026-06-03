@@ -97,8 +97,12 @@ class DataRepository {
         var hp = 20.0
         hpTxt?.split("\n")
             ?.filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith(":") }
-            ?.lastOrNull()?.trim()?.split("\\s+".toRegex())
-            ?.getOrNull(4)?.toDoubleOrNull()?.let { if (it > 0) hp = it }
+            ?.lastOrNull()?.trim()?.split("\\s+".toRegex())?.let { cols ->
+                val north = cols.getOrNull(2)?.toDoubleOrNull() ?: 0.0
+                val south = cols.getOrNull(3)?.toDoubleOrNull() ?: 0.0
+                val total = north + south
+                if (total > 0) hp = total
+            }
 
         // Flares
         val parsedFlares = flares?.takeLast(5)?.reversed()?.mapNotNull { f ->
