@@ -46,7 +46,7 @@ fun AssessScreen(data: AssessData) {
                     Column {
                         Text(data.totalLabel, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = scoreColor)
                         Text("INTEGRATED BODY BURDEN INDEX", fontSize = 9.sp, color = AppColors.TextDim, letterSpacing = 1.sp)
-                        Text("Space + SR + Environment", fontSize = 11.sp, color = AppColors.TextSecondary)
+                        Text("Space + IMF + SR + ENV + BIO", fontSize = 11.sp, color = AppColors.TextSecondary)
                     }
                 }
             }

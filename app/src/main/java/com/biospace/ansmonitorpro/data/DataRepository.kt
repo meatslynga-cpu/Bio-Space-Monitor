@@ -521,13 +521,14 @@ class DataRepository {
         envScore = envScore.coerceIn(0, 15)
 
         // Total Autonomic Stress Index (0-85 from external drivers)
-        val total = (spaceScore + imfScore + srScore + envScore).coerceIn(0, 100)
+        // external drivers subtotal (used for context)
 
         // BIO response score: max 15 (displayed separately — effect, not cause)
         var bioScore = 0
-        bioScore += if (ans.loadIndex > 70) 15 else if (ans.loadIndex > 50) 10 else if (ans.loadIndex > 30) 5 else 0
+        bioScore += if (ans.loadIndex > 70) 15 else if (ans.loadIndex > 50) 12 else if (ans.loadIndex > 35) 9 else if (ans.loadIndex > 20) 5 else 0
         bioScore = bioScore.coerceIn(0, 15)
 
+        val total = ans.loadIndex.coerceIn(0, 100)
         val label = when { total >= 75 -> "CRITICAL LOAD"; total >= 55 -> "HIGH LOAD"; total >= 35 -> "MODERATE LOAD"; total >= 20 -> "LOW LOAD"; else -> "MINIMAL LOAD" }
 
         val imfStatus = when {
