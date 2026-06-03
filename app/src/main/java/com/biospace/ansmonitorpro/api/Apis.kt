@@ -4,9 +4,6 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface NoaaApi {
-    @GET("products/noaa-planetary-k-index.json")
-    suspend fun getKp(): List<List<Any>>
-
     @GET("products/solar-wind/plasma-7-day.json")
     suspend fun getSolarWindPlasma(): List<List<Any>>
 

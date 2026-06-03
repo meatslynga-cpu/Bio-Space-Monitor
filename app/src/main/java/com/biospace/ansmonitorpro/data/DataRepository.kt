@@ -39,7 +39,7 @@ class DataRepository {
     suspend fun fetchSpaceWeather(): SpaceWeatherData = withContext(Dispatchers.IO) {
         val today = dateStr(0); val week = dateStr(7)
 
-        val kpR   = async { runCatching { noaa.getKp() } }
+        val kpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/json/boulder_k_index_1m.json").build()).execute().body?.string() ?: "" } }
         val plaR  = async { runCatching { noaa.getSolarWindPlasma() } }
         val magR  = async { runCatching { noaa.getSolarWindMag() } }
         val hpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt").build()).execute().body?.string() ?: "" } }
@@ -50,7 +50,7 @@ class DataRepository {
         val hssR  = async { runCatching { donki.getHSS(week, today) } }
         val sepR  = async { runCatching { donki.getSEP(week, today) } }
 
-        val kpData  = kpR.await().getOrNull()
+        val kpRaw   = kpR.await().getOrNull()
         val plasma  = plaR.await().getOrNull()
         val mag     = magR.await().getOrNull()
         val hpTxt   = hpR.await().getOrNull()
@@ -61,15 +61,18 @@ class DataRepository {
         val hss     = hssR.await().getOrNull()
         val sep     = sepR.await().getOrNull()
 
-        // Kp
+        // Kp — raw OkHttp parse (Gson cannot deserialize List<List<Any>>)
         val kpHist = mutableListOf<Double>()
         var kp = 1.0
-        kpData?.drop(1)?.forEach { row ->
-            (row as? List<*>)?.getOrNull(1)?.toString()?.toDoubleOrNull()?.let {
-                if (it >= 0) kpHist.add(it)
+        try {
+            val arr = org.json.JSONArray(kpRaw ?: "[]")
+            for (i in 0 until arr.length()) {
+                val row = arr.getJSONObject(i)
+                val v = row.optDouble("kp_index", -1.0)
+                if (v >= 0) kpHist.add(v)
             }
-        }
-        if (kpHist.isNotEmpty()) kp = kpHist.last()
+            if (kpHist.isNotEmpty()) kp = kpHist.last()
+        } catch (_: Exception) {}
 
         // Solar wind plasma
         val speedHist = mutableListOf<Double>()
@@ -518,15 +521,26 @@ class DataRepository {
             (tDays * 24).toInt().coerceIn(12, 96)
         } else 999
 
-        if (cmeSpeed > 2000) { severityScore += 50; drivers.add("Extreme CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
-        else if (cmeSpeed > 1500) { severityScore += 40; drivers.add("Major CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
-        else if (cmeSpeed > 1000) { severityScore += 30; drivers.add("Fast CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
-        else if (cmeSpeed > 600)  { severityScore += 20; drivers.add("Moderate CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
-        else if (cmeSpeed > 300)  { severityScore += 8;  drivers.add("Slow CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+        // Only score CME if still inbound (arrivalHrs > 0), not if already passed (== 0)
+        if (arrivalHrs > 0) {
+            if (cmeSpeed > 2000) { severityScore += 50; drivers.add("Extreme CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+            else if (cmeSpeed > 1500) { severityScore += 40; drivers.add("Major CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+            else if (cmeSpeed > 1000) { severityScore += 30; drivers.add("Fast CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+            else if (cmeSpeed > 600)  { severityScore += 20; drivers.add("Moderate CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+            else if (cmeSpeed > 300)  { severityScore += 8;  drivers.add("Slow CME (${cmeSpeed.toInt()} km/s, ETA ~${arrivalHrs}h)") }
+        } else if (cmeSpeed > 300) {
+            drivers.add("CME passed (${cmeSpeed.toInt()} km/s) — storm may be subsiding")
+        }
         if (space.cmeArrivalHrs < 999) arrivalHrs = space.cmeArrivalHrs
 
-        // Flare contribution
-        val flareMax = space.flares.maxOfOrNull { f ->
+        // Flare contribution — only count if CME still inbound or no CME link
+        // If cmeArrivalHrs == 0 the CME already passed, don't double-count
+        val activeFlaresOnly = if (space.cmeArrivalHrs == 0) {
+            space.flares.filter { !it.hasCme } // CME arrived — only count non-CME flares
+        } else {
+            space.flares // CME still inbound or no CME — count all
+        }
+        val flareMax = activeFlaresOnly.maxOfOrNull { f ->
             when { f.flareClass.startsWith("X") -> 4; f.flareClass.startsWith("M") -> 3
                    f.flareClass.startsWith("C") -> 2; else -> 1 }
         } ?: 0
@@ -536,8 +550,10 @@ class DataRepository {
             3 -> { severityScore += 15; drivers.add("M-class flare") }
             2 -> { severityScore += 5;  drivers.add("C-class flare") }
         }
-        if (space.flares.any { it.hasCme && it.flareClass.startsWith("X") }) { severityScore += 15; drivers.add("X-flare with CME") }
-        else if (space.flares.any { it.hasCme }) { severityScore += 8; drivers.add("Flare with CME") }
+        if (space.cmeArrivalHrs > 0) {
+            if (activeFlaresOnly.any { it.hasCme && it.flareClass.startsWith("X") }) { severityScore += 15; drivers.add("X-flare with CME (inbound)") }
+            else if (activeFlaresOnly.any { it.hasCme }) { severityScore += 8; drivers.add("Flare with CME (inbound)") }
+        }
 
         // HSS contribution
         if (space.hssActive) {
