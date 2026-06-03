@@ -148,7 +148,7 @@ ANS Burden: ${b.loadIndex}% | Alert: ${b.alertLevel.name} | Magnitude: ${b.magni
 Kp: ${"%.1f".format(sw.kp)} | Solar Wind: ${sw.solarWindSpeed.toInt()} km/s | IMF Bz: ${"%.1f".format(sw.bz)} nT (${sw.bzLabel})
 Flares: ${sw.flares.size} | CME: ${sw.cmeSpeed.toInt()} km/s arrival ${sw.cmeArrivalHrs}hrs | GST: ${sw.gstActive} | HSS: ${sw.hssActive}
 Hemispheric Power: ${sw.hemisphericPower.toInt()} GW (${sw.fountainDumping})
-SR Fundamental: ${s.schumann.fundamentalHz} Hz (drift ${s.schumann.freqDrift > 0? "+" : ""}${"%.3f".format(s.schumann.freqDrift)} Hz from 7.83) | Amplitude: ${"%.2f".format(s.schumann.amplitudePt)} pT | Q-Factor: ${"%.1f".format(s.schumann.qFactor)} | Coherence: ${s.schumann.coherenceScore}% (${s.schumann.coherenceLabel}) | Cavity: ${s.schumann.cavityHeight} | TEC: ${"%.1f".format(s.schumann.tecLocal)} TECU (${"%.1f".format(s.schumann.tecDelta)} from median)
+SR Fundamental: ${s.schumann.fundamentalHz} Hz (drift ${if (s.schumann.freqDrift > 0) "+" else ""}${"%.3f".format(s.schumann.freqDrift)} Hz from 7.83) | Amplitude: ${"%.2f".format(s.schumann.amplitudePt)} pT | Q-Factor: ${"%.1f".format(s.schumann.qFactor)} | Coherence: ${s.schumann.coherenceScore}% (${s.schumann.coherenceLabel}) | Cavity: ${s.schumann.cavityHeight} | TEC: ${"%.1f".format(s.schumann.tecLocal)} TECU (${"%.1f".format(s.schumann.tecDelta)} from median)
 Weather: ${s.env.tempF}°F | Humidity: ${s.env.humidity}% | Pressure: ${s.env.pressureHpa.toInt()} hPa | ΔP: ${"%.1f".format(s.env.pressureDelta)} hPa/hr
 Heart Rate: ${if (bio.heartRate > 0) "${bio.heartRate} bpm (${bio.hrSource})" else "not recorded"}
 BP: ${if (bio.bpSys > 0) "${bio.bpSys}/${bio.bpDia} mmHg" else "not recorded"}
