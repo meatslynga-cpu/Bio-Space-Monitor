@@ -189,7 +189,7 @@ class DataRepository {
             cmeSpeed = cmeSpeed,
             cmeArrivalHrs = cmeArrival,
             cmeDirection = cmeDir,
-                          cmeCount = cmeCount_inbound,
+            cmeCount = cmeCount_inbound,
             timestamp = ts
         )
     }
