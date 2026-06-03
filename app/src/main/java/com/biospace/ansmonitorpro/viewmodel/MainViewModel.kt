@@ -24,6 +24,7 @@ private val K_NAME = stringPreferencesKey("loc_name")
 private val K_GEM  = stringPreferencesKey("gemini_key")
 private val K_USER = stringPreferencesKey("username")
 private val K_MAC  = stringPreferencesKey("watch_mac")
+private val K_PROFILE = stringPreferencesKey("autonomic_profile")
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -181,7 +182,8 @@ Sections: 1) Overall ANS Assessment  2) Space & Environmental Drivers  3) Biomet
                 lat = it[K_LAT] ?: 40.71, lon = it[K_LON] ?: -74.01,
                 useGps = it[K_GPS] ?: true, locationName = it[K_NAME] ?: "",
                 geminiKey = it[K_GEM] ?: "", username = it[K_USER] ?: "",
-                watchMac = it[K_MAC] ?: ""
+                watchMac = it[K_MAC] ?: "",
+                autonomicProfile = try { AutonomicProfile.valueOf(it[K_PROFILE] ?: "STANDARD") } catch (e: Exception) { AutonomicProfile.STANDARD }
             )
             _uiState.update { st -> st.copy(settings = s) }
         }
@@ -193,6 +195,7 @@ Sections: 1) Overall ANS Assessment  2) Space & Environmental Drivers  3) Biomet
             it[K_LAT] = s.lat; it[K_LON] = s.lon; it[K_GPS] = s.useGps
             it[K_NAME] = s.locationName; it[K_GEM] = s.geminiKey
             it[K_USER] = s.username; it[K_MAC] = s.watchMac
+            it[K_PROFILE] = s.autonomicProfile.name
         }
     }
 }
