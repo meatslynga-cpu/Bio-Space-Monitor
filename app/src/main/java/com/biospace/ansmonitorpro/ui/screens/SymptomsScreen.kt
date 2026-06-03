@@ -148,6 +148,8 @@ fun SymptomsScreen(
     var notes  by remember { mutableStateOf("") }
     var saved  by remember { mutableStateOf(false) }
     var exportMsg by remember { mutableStateOf("") }
+    var activityLevel by remember { mutableStateOf("SEDENTARY") }
+    var activeDuration by remember { mutableStateOf("<2hrs") }
     val context = LocalContext.current
 
     Column(
@@ -171,6 +173,40 @@ fun SymptomsScreen(
                 InfoChip("HI", "${env.heatIndex}°F", if (env.heatIndex > 90) AppColors.Orange else AppColors.TextSecondary, Modifier.weight(1f))
                 InfoChip("HUMID", "${env.humidity}%", if (env.humidity > 75) AppColors.Gold else AppColors.TextSecondary, Modifier.weight(1f))
                 InfoChip("SR", "${"%.2f".format(schumann.fundamentalHz)}Hz", AppColors.TextSecondary, Modifier.weight(1f))
+            }
+        }
+
+        // ── Activity Context ──────────────────────────────────────────────
+        SectionCard(borderColor = AppColors.Cyan.copy(.3f)) {
+            SectionHeader("ACTIVITY CONTEXT", AppColors.Cyan)
+            SubLabel("TODAY'S PHYSICAL ACTIVITY LEVEL")
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("SEDENTARY","LIGHT","NORMAL","EXERTIONAL").forEach { level ->
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                            .background(if (activityLevel == level) AppColors.Cyan.copy(.25f) else AppColors.Surface)
+                            .border(1.dp, if (activityLevel == level) AppColors.Cyan else AppColors.TextDim.copy(.3f), RoundedCornerShape(8.dp))
+                            .clickable { activityLevel = level }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text(level, fontSize = 9.sp, color = if (activityLevel == level) AppColors.Cyan else AppColors.TextDim, fontWeight = FontWeight.Bold) }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            SubLabel("ACTIVE DURATION TODAY")
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("<2hrs","2-4hrs","4-6hrs","Most of day").forEach { dur ->
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                            .background(if (activeDuration == dur) AppColors.Gold.copy(.25f) else AppColors.Surface)
+                            .border(1.dp, if (activeDuration == dur) AppColors.Gold else AppColors.TextDim.copy(.3f), RoundedCornerShape(8.dp))
+                            .clickable { activeDuration = dur }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) { Text(dur, fontSize = 9.sp, color = if (activeDuration == dur) AppColors.Gold else AppColors.TextDim, fontWeight = FontWeight.Bold) }
+                }
             }
         }
 
@@ -272,7 +308,9 @@ fun SymptomsScreen(
                             pressureDeltaAtLog = env.pressureDelta,
                             heatIndexAtLog   = env.heatIndex,
                             burdenAtLog      = ans.loadIndex,
-                            alertLevelAtLog  = ans.alertLevel.name
+                            alertLevelAtLog  = ans.alertLevel.name,
+                            activityLevel    = activityLevel,
+                            activeDuration   = activeDuration
                         ))
                         saved = true
                         exportMsg = ""

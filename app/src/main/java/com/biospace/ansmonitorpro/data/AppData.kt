@@ -184,7 +184,9 @@ data class SymptomLog(
     val pressureDeltaAtLog: Double = 0.0,
     val heatIndexAtLog: Int = 0,
     val burdenAtLog: Int = 0,
-    val alertLevelAtLog: String = "GREEN"
+    val alertLevelAtLog: String = "GREEN",
+    val activityLevel: String = "SEDENTARY",
+    val activeDuration: String = "<2hrs"
 )
 // ── Alert entries (NOAA) ──────────────────────────────────────────────────────
 data class AlertEntry(
