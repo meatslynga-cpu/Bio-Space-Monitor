@@ -152,10 +152,12 @@ fun AppNavigation(vm: MainViewModel) {
                 "assess"   -> AssessScreen(state.assess)
                 "alerts"   -> AlertsScreen(state.alerts)
                 "symptoms" -> SymptomsScreen(
-                    logs           = state.symptomLogs,
-                    currentKp      = state.space.kp,
-                    currentBurden  = state.ans.loadIndex,
-                    onLog          = { vm.logSymptom(it) }
+                    logs      = state.symptomLogs,
+                    space     = state.space,
+                    schumann  = state.schumann,
+                    env       = state.env,
+                    ans       = state.ans,
+                    onLog     = { vm.logSymptom(it) }
                 )
                 "report"   -> ReportScreen(
                     reportOutput  = state.reportOutput,

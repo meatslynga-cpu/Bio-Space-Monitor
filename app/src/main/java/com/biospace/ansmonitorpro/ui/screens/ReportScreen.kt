@@ -13,8 +13,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import android.content.ContentValues
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,7 +36,9 @@ fun ReportScreen(
 ) {
     var clinical by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    var downloadMsg by remember { mutableStateOf("") }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -121,6 +129,36 @@ fun ReportScreen(
                         letterSpacing = 1.sp
                     )
                 }
+            }
+            Box(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(AppColors.Cyan.copy(.1f))
+                    .border(1.dp, AppColors.Cyan, RoundedCornerShape(10.dp))
+                    .clickable {
+                        val filename = "ANSTriggerPro_Report_${java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())}.txt"
+                        try {
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                val values = android.content.ContentValues().apply {
+                                    put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
+                                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+                                    put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                                }
+                                val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                                uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> os.write(reportOutput.toByteArray()) } }
+                            } else {
+                                java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), filename).writeText(reportOutput)
+                            }
+                            downloadMsg = "Saved to Downloads/$filename"
+                        } catch (e: Exception) { downloadMsg = "Error: ${e.message}" }
+                    }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⬇  DOWNLOAD REPORT", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppColors.Cyan, letterSpacing = 1.sp)
+            }
+            if (downloadMsg.isNotBlank()) {
+                Text(downloadMsg, fontSize = 10.sp, color = if (downloadMsg.startsWith("Error")) AppColors.Red else AppColors.Green, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
             SectionCard(borderColor = AppColors.Divider) {
                 Text(

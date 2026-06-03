@@ -1,5 +1,10 @@
 package com.biospace.ansmonitorpro.ui.screens
 
+import android.content.ContentValues
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,41 +18,115 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.biospace.ansmonitorpro.data.SymptomLog
+import com.biospace.ansmonitorpro.data.*
 import com.biospace.ansmonitorpro.ui.components.*
 import com.biospace.ansmonitorpro.ui.theme.AppColors
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
 private data class SymptomField(val key: String, val label: String, val emoji: String)
 
 private val FIELDS = listOf(
-    SymptomField("lightheadedness", "Lightheadedness",  "💫"),
-    SymptomField("heartPounding",   "Heart Pounding",   "💓"),
-    SymptomField("fatigue",         "Fatigue",          "😴"),
-    SymptomField("brainFog",        "Brain Fog",        "🌫"),
-    SymptomField("chestPain",       "Chest Discomfort", "🫀"),
-    SymptomField("nausea",          "Nausea",           "🤢"),
-    SymptomField("shortBreath",     "Short of Breath",  "🫁"),
-    SymptomField("tremors",         "Tremors",          "🫨"),
-    SymptomField("blurredVision",   "Blurred Vision",   "👁"),
-    SymptomField("headache",        "Headache",         "🤕")
+    SymptomField("lightheadedness", "Lightheadedness", "💫"),
+    SymptomField("heartPounding",   "Heart Pounding",  "💓"),
+    SymptomField("fatigue",         "Fatigue",         "😴"),
+    SymptomField("brainFog",        "Brain Fog",       "🌫"),
+    SymptomField("chestPain",       "Chest Discomfort","🫀"),
+    SymptomField("nausea",          "Nausea",          "🤢"),
+    SymptomField("shortBreath",     "Short of Breath", "🫁"),
+    SymptomField("tremors",         "Tremors",         "🫨"),
+    SymptomField("blurredVision",   "Blurred Vision",  "👁"),
+    SymptomField("headache",        "Headache",        "🤕")
 )
+
+private fun exportSymptomLogs(context: Context, logs: List<SymptomLog>): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+    val sb = StringBuilder()
+    sb.appendLine("ANS TRIGGER PRO — SYMPTOM LOG EXPORT")
+    sb.appendLine("Generated: ${sdf.format(Date())}")
+    sb.appendLine("Total entries: ${logs.size}")
+    sb.appendLine("=".repeat(60))
+    logs.forEach { log ->
+        sb.appendLine()
+        sb.appendLine("DATE/TIME: ${sdf.format(Date(log.timestamp))}")
+        sb.appendLine("── SYMPTOMS ──────────────────────────────")
+        sb.appendLine("  Lightheadedness : ${log.lightheadedness}/10")
+        sb.appendLine("  Heart Pounding  : ${log.heartPounding}/10")
+        sb.appendLine("  Fatigue         : ${log.fatigue}/10")
+        sb.appendLine("  Brain Fog       : ${log.brainFog}/10")
+        sb.appendLine("  Chest Discomfort: ${log.chestPain}/10")
+        sb.appendLine("  Nausea          : ${log.nausea}/10")
+        sb.appendLine("  Short of Breath : ${log.shortBreath}/10")
+        sb.appendLine("  Tremors         : ${log.tremors}/10")
+        sb.appendLine("  Blurred Vision  : ${log.blurredVision}/10")
+        sb.appendLine("  Headache        : ${log.headache}/10")
+        val total = log.lightheadedness + log.heartPounding + log.fatigue + log.brainFog +
+            log.chestPain + log.nausea + log.shortBreath + log.tremors + log.blurredVision + log.headache
+        sb.appendLine("  AVG SEVERITY    : ${"%.1f".format(total / 10.0)}/10")
+        if (log.notes.isNotBlank()) sb.appendLine("  NOTES           : ${log.notes}")
+        sb.appendLine("── SPACE WEATHER AT TIME OF LOG ──────────")
+        sb.appendLine("  Kp Index        : ${"%.1f".format(log.kpAtLog)}")
+        sb.appendLine("  IMF Bz          : ${"%.1f".format(log.bzAtLog)} nT")
+        sb.appendLine("  Solar Wind      : ${log.solarWindAtLog.toInt()} km/s")
+        sb.appendLine("  Storm Level     : ${log.stormLevelAtLog}")
+        sb.appendLine("  HSS Active      : ${if (log.hssAtLog) "YES" else "No"}")
+        sb.appendLine("  SEP Active      : ${if (log.sepAtLog) "YES" else "No"}")
+        sb.appendLine("  GST Active      : ${if (log.gstAtLog) "YES" else "No"}")
+        sb.appendLine("── SCHUMANN AT TIME OF LOG ───────────────")
+        sb.appendLine("  Frequency       : ${"%.2f".format(log.schumannHzAtLog)} Hz")
+        sb.appendLine("  Q-Factor        : ${"%.1f".format(log.schumannQAtLog)}")
+        sb.appendLine("  Amplitude       : ${"%.2f".format(log.schumannAmpAtLog)} pT")
+        sb.appendLine("── ENVIRONMENT AT TIME OF LOG ────────────")
+        sb.appendLine("  Temperature     : ${log.tempAtLog}°F")
+        sb.appendLine("  Heat Index      : ${log.heatIndexAtLog}°F")
+        sb.appendLine("  Humidity        : ${log.humidAtLog}%")
+        sb.appendLine("  Pressure        : ${"%.1f".format(log.pressureAtLog)} hPa")
+        sb.appendLine("  Pressure Delta  : ${"%.1f".format(log.pressureDeltaAtLog)} hPa/hr")
+        sb.appendLine("── ANS BURDEN ────────────────────────────")
+        sb.appendLine("  Load Index      : ${log.burdenAtLog}%")
+        sb.appendLine("  Alert Level     : ${log.alertLevelAtLog}")
+        sb.appendLine("-".repeat(60))
+    }
+    val filename = "ANSTriggerPro_SymptomLog_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.txt"
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> os.write(sb.toString().toByteArray()) } }
+        } else {
+            val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), filename)
+            file.writeText(sb.toString())
+        }
+        "Saved to Downloads/$filename"
+    } catch (e: Exception) {
+        "Error: ${e.message}"
+    }
+}
 
 @Composable
 fun SymptomsScreen(
     logs: List<SymptomLog>,
-    currentKp: Double,
-    currentBurden: Int,
+    space: SpaceWeatherData,
+    schumann: SchumannData,
+    env: EnvData,
+    ans: AnsData,
     onLog: (SymptomLog) -> Unit
 ) {
     val scores = remember { mutableStateMapOf<String, Int>().apply { FIELDS.forEach { put(it.key, 0) } } }
     var notes  by remember { mutableStateOf("") }
     var saved  by remember { mutableStateOf(false) }
+    var exportMsg by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
@@ -55,13 +134,21 @@ fun SymptomsScreen(
     ) {
         // ── Header ────────────────────────────────────────────────────────
         SectionCard(borderColor = AppColors.Magenta.copy(.3f)) {
-            SectionHeader("SYMPTOM LOG", AppColors.Magenta)
-            SubLabel("RATE EACH SYMPTOM 0–10 · CORRELATED WITH LIVE KP & ANS BURDEN")
+            SectionHeader("SYMPTOM TRACKER", AppColors.Magenta)
+            SubLabel("RATE SYMPTOMS · SPACE/ENV CONDITIONS AUTO-CAPTURED AT LOG TIME")
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                InfoChip("Kp", "${"%.1f".format(currentKp)}", AppColors.Cyan, Modifier.weight(1f))
-                InfoChip("BURDEN", "${currentBurden}%", loadColor(currentBurden), Modifier.weight(1f))
+                InfoChip("Kp", "${"%.1f".format(space.kp)}", AppColors.Cyan, Modifier.weight(1f))
+                InfoChip("BURDEN", "${ans.loadIndex}%", loadColor(ans.loadIndex), Modifier.weight(1f))
+                InfoChip("Bz", "${"%.1f".format(space.bz)}", if (space.bz < -3) AppColors.Red else AppColors.TextSecondary, Modifier.weight(1f))
                 InfoChip("TIME", SimpleDateFormat("HH:mm", Locale.US).format(Date()), AppColors.TextSecondary, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                InfoChip("TEMP", "${env.tempF}°F", AppColors.TextSecondary, Modifier.weight(1f))
+                InfoChip("HI", "${env.heatIndex}°F", if (env.heatIndex > 90) AppColors.Orange else AppColors.TextSecondary, Modifier.weight(1f))
+                InfoChip("HUMID", "${env.humidity}%", if (env.humidity > 75) AppColors.Gold else AppColors.TextSecondary, Modifier.weight(1f))
+                InfoChip("SR", "${"%.2f".format(schumann.fundamentalHz)}Hz", AppColors.TextSecondary, Modifier.weight(1f))
             }
         }
 
@@ -73,25 +160,14 @@ fun SymptomsScreen(
                 val v = scores[field.key] ?: 0
                 val color = symptomColor(v)
                 Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(field.emoji, fontSize = 16.sp)
                             Text(field.label, fontSize = 12.sp, color = AppColors.TextPrimary)
                         }
-                        Text(
-                            if (v == 0) "—" else "$v",
-                            fontSize = 16.sp, fontWeight = FontWeight.Black, color = color
-                        )
+                        Text(if (v == 0) "—" else "$v", fontSize = 16.sp, fontWeight = FontWeight.Black, color = color)
                     }
                     Spacer(Modifier.height(4.dp))
-                    // 0–10 tap bar
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         (0..10).forEach { n ->
                             val bg = if (n <= v && v > 0) color.copy(alpha = .85f) else AppColors.CardBg2
@@ -123,23 +199,15 @@ fun SymptomsScreen(
         SectionCard {
             SubLabel("NOTES (OPTIONAL)")
             Spacer(Modifier.height(8.dp))
-            Box(
-                Modifier.fillMaxWidth().height(80.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(AppColors.CardBg2)
-                    .border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))
-            ) {
+            Box(Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(8.dp)).background(AppColors.CardBg2).border(1.dp, AppColors.Divider, RoundedCornerShape(8.dp))) {
                 androidx.compose.foundation.text.BasicTextField(
                     value = notes,
                     onValueChange = { notes = it; saved = false },
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        color = AppColors.TextPrimary, fontSize = 13.sp, lineHeight = 18.sp
-                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = AppColors.TextPrimary, fontSize = 13.sp, lineHeight = 18.sp),
                     cursorBrush = androidx.compose.ui.graphics.SolidColor(AppColors.Cyan),
                     modifier = Modifier.fillMaxSize().padding(10.dp),
                     decorationBox = { inner ->
-                        if (notes.isEmpty()) Text("Describe symptoms, triggers, context…",
-                            fontSize = 12.sp, color = AppColors.TextDim)
+                        if (notes.isEmpty()) Text("Describe symptoms, triggers, context…", fontSize = 12.sp, color = AppColors.TextDim)
                         inner()
                     }
                 )
@@ -155,21 +223,37 @@ fun SymptomsScreen(
                 .clickable {
                     if (!saved) {
                         onLog(SymptomLog(
-                            lightheadedness = scores["lightheadedness"] ?: 0,
-                            heartPounding   = scores["heartPounding"] ?: 0,
-                            fatigue         = scores["fatigue"] ?: 0,
-                            brainFog        = scores["brainFog"] ?: 0,
-                            chestPain       = scores["chestPain"] ?: 0,
-                            nausea          = scores["nausea"] ?: 0,
-                            shortBreath     = scores["shortBreath"] ?: 0,
-                            tremors         = scores["tremors"] ?: 0,
-                            blurredVision   = scores["blurredVision"] ?: 0,
-                            headache        = scores["headache"] ?: 0,
-                            notes           = notes,
-                            kpAtLog         = currentKp,
-                            burdenAtLog     = currentBurden
+                            lightheadedness  = scores["lightheadedness"] ?: 0,
+                            heartPounding    = scores["heartPounding"] ?: 0,
+                            fatigue          = scores["fatigue"] ?: 0,
+                            brainFog         = scores["brainFog"] ?: 0,
+                            chestPain        = scores["chestPain"] ?: 0,
+                            nausea           = scores["nausea"] ?: 0,
+                            shortBreath      = scores["shortBreath"] ?: 0,
+                            tremors          = scores["tremors"] ?: 0,
+                            blurredVision    = scores["blurredVision"] ?: 0,
+                            headache         = scores["headache"] ?: 0,
+                            notes            = notes,
+                            kpAtLog          = space.kp,
+                            bzAtLog          = space.bz,
+                            solarWindAtLog   = space.solarWindSpeed,
+                            hssAtLog         = space.hssActive,
+                            sepAtLog         = space.sepActive,
+                            gstAtLog         = space.gstActive,
+                            stormLevelAtLog  = space.stormG,
+                            schumannHzAtLog  = schumann.fundamentalHz,
+                            schumannQAtLog   = schumann.qFactor,
+                            schumannAmpAtLog = schumann.amplitudePt,
+                            tempAtLog        = env.tempF,
+                            humidAtLog       = env.humidity,
+                            pressureAtLog    = env.pressureHpa,
+                            pressureDeltaAtLog = env.pressureDelta,
+                            heatIndexAtLog   = env.heatIndex,
+                            burdenAtLog      = ans.loadIndex,
+                            alertLevelAtLog  = ans.alertLevel.name
                         ))
                         saved = true
+                        exportMsg = ""
                     }
                 }
                 .padding(vertical = 14.dp),
@@ -183,6 +267,24 @@ fun SymptomsScreen(
             )
         }
 
+        // ── Download button ───────────────────────────────────────────────
+        if (logs.isNotEmpty()) {
+            Box(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(AppColors.Cyan.copy(.1f))
+                    .border(1.dp, AppColors.Cyan, RoundedCornerShape(10.dp))
+                    .clickable { exportMsg = exportSymptomLogs(context, logs) }
+                    .padding(vertical = 14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⬇  DOWNLOAD SYMPTOM LOG", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppColors.Cyan, letterSpacing = 1.sp)
+            }
+            if (exportMsg.isNotBlank()) {
+                Text(exportMsg, fontSize = 10.sp, color = if (exportMsg.startsWith("Error")) AppColors.Red else AppColors.Green, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            }
+        }
+
         // ── Log history ───────────────────────────────────────────────────
         if (logs.isNotEmpty()) {
             SectionCard {
@@ -194,27 +296,25 @@ fun SymptomsScreen(
                         log.brainFog + log.chestPain + log.nausea + log.shortBreath +
                         log.tremors + log.blurredVision + log.headache
                     val avg = if (total > 0) total / 10 else 0
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(dt, fontSize = 11.sp, color = AppColors.TextSecondary, fontWeight = FontWeight.SemiBold)
-                            Spacer(Modifier.height(2.dp))
-                            Text("Kp ${"%.1f".format(log.kpAtLog)} · Burden ${log.burdenAtLog}%",
-                                fontSize = 9.sp, color = AppColors.TextDim)
-                            if (log.notes.isNotBlank())
-                                Text(log.notes.take(50) + if (log.notes.length > 50) "…" else "",
-                                    fontSize = 9.sp, color = AppColors.TextDim)
+                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text(dt, fontSize = 11.sp, color = AppColors.TextSecondary, fontWeight = FontWeight.SemiBold)
+                                Spacer(Modifier.height(2.dp))
+                                Text("Kp ${"%.1f".format(log.kpAtLog)} · Bz ${"%.1f".format(log.bzAtLog)}nT · Burden ${log.burdenAtLog}% · ${log.alertLevelAtLog}", fontSize = 9.sp, color = AppColors.TextDim)
+                                Text("${log.tempAtLog}°F · HI ${log.heatIndexAtLog}°F · ${log.humidAtLog}% humid · ΔP ${"%.1f".format(log.pressureDeltaAtLog)}hPa · SR ${"%.2f".format(log.schumannHzAtLog)}Hz", fontSize = 9.sp, color = AppColors.TextDim)
+                                if (log.hssAtLog || log.sepAtLog || log.gstAtLog)
+                                    Text("${if (log.hssAtLog) "HSS " else ""}${if (log.sepAtLog) "SEP " else ""}${if (log.gstAtLog) "GST" else ""}".trim(), fontSize = 9.sp, color = AppColors.Orange)
+                                if (log.notes.isNotBlank())
+                                    Text(log.notes.take(60) + if (log.notes.length > 60) "…" else "", fontSize = 9.sp, color = AppColors.TextDim)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("$avg/10", fontSize = 18.sp, fontWeight = FontWeight.Black, color = symptomColor(avg))
+                                Text("AVG", fontSize = 8.sp, color = AppColors.TextDim)
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("$avg/10", fontSize = 18.sp, fontWeight = FontWeight.Black,
-                                color = symptomColor(avg))
-                            Text("AVG", fontSize = 8.sp, color = AppColors.TextDim)
-                        }
+                        Box(Modifier.fillMaxWidth().height(0.5.dp).background(AppColors.Divider))
                     }
-                    Box(Modifier.fillMaxWidth().height(0.5.dp).background(AppColors.Divider))
                 }
             }
         }
@@ -236,9 +336,9 @@ fun InfoChip(label: String, value: String, color: Color, modifier: Modifier) {
 }
 
 fun symptomColor(v: Int): Color = when {
-    v >= 7  -> AppColors.Red
-    v >= 4  -> AppColors.Orange
-    v >= 2  -> AppColors.Gold
-    v >= 1  -> AppColors.Green
-    else    -> AppColors.TextDim
+    v >= 7 -> AppColors.Red
+    v >= 4 -> AppColors.Orange
+    v >= 2 -> AppColors.Gold
+    v >= 1 -> AppColors.Green
+    else   -> AppColors.TextDim
 }
