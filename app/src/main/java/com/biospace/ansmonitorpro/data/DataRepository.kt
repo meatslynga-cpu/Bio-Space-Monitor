@@ -351,14 +351,22 @@ class DataRepository {
             if (space.flares.any { it.flareClass.startsWith("X") }) bonus += 12f  // X-class flares
             if (space.hssActive && bz < -3) bonus += 8f                           // HSS + southward combo
             if (space.sepActive && space.hssActive) bonus += 6f                   // SEP + HSS combo
-            bonus.coerceIn(0f, 45f)
+            if (q < 3.5) bonus += (3.5 - q).toFloat() * 4f
+            if (kotlin.math.abs(sr.freqDrift) > 0.2) bonus += (kotlin.math.abs(sr.freqDrift) * 12f).coerceIn(0f, 10f)
+            if (amp > 2.0) bonus += 6f else if (amp < 0.6) bonus += 4f
+            bonus.coerceIn(0f, 55f)
         } else {
             var bonus = 0f
             if (bz < -5) bonus += (kotlin.math.abs(bz) - 5).toFloat() * 1.5f
             if (space.hssActive) bonus += 5f
             if (space.sepActive) bonus += 5f
             if (space.gstActive) bonus += 8f
-            bonus.coerceIn(0f, 25f)
+            if (kotlin.math.abs(env.pressureDelta) > 3.0) bonus += (kotlin.math.abs(env.pressureDelta) - 3.0).toFloat() * 2f
+            if (kotlin.math.abs(env.pressureDelta) > 5.0) bonus += 6f
+            if (env.heatIndex > 95) bonus += 8f else if (env.heatIndex > 85) bonus += 4f
+            if (env.humidity > 80) bonus += 6f else if (env.humidity > 65) bonus += 3f
+            if (env.heatIndex > 85 && env.humidity > 70) bonus += 5f
+            bonus.coerceIn(0f, 35f)
         }
 
         val overall = (rawOverall + eventBonus).coerceAtLeast(baselineFloor).coerceIn(0f, 100f).toInt()
