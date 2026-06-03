@@ -98,6 +98,8 @@ class DataRepository {
 
         // Hemispheric power
         var hp = 20.0
+        var hpNorth = 10.0
+        var hpSouth = 10.0
         hpTxt?.split("\n")
             ?.filter { it.isNotBlank() && !it.startsWith("#") && !it.startsWith(":") }
             ?.lastOrNull()?.trim()?.split("\\s+".toRegex())?.let { cols ->
@@ -105,6 +107,8 @@ class DataRepository {
                 val south = cols.getOrNull(3)?.toDoubleOrNull() ?: 0.0
                 val total = north + south
                 if (total > 0) hp = total
+                hpNorth = north
+                hpSouth = south
             }
 
         // Flares
@@ -169,6 +173,8 @@ class DataRepository {
             hssActive = (hss?.size ?: 0) > 0,
             sepActive = (sep?.size ?: 0) > 0,
             hemisphericPower = hp,
+            hemisphericPowerNorth = hpNorth,
+            hemisphericPowerSouth = hpSouth,
             fountainDumping = fountain,
             flares = parsedFlares,
             cmeSpeed = cmeSpeed,

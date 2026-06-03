@@ -23,6 +23,8 @@ data class SpaceWeatherData(
     val hssActive: Boolean = false,
     val sepActive: Boolean = false,
     val hemisphericPower: Double = 20.0,
+    val hemisphericPowerNorth: Double = 10.0,
+    val hemisphericPowerSouth: Double = 10.0,
     val fountainDumping: String = "QUIET",
     val flares: List<FlareEntry> = emptyList(),
     val cmeSpeed: Double = 300.0,

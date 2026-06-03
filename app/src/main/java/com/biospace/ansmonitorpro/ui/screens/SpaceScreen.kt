@@ -134,7 +134,7 @@ fun SpaceScreen(data: SpaceWeatherData) {
                 EventFlagCount("IPS", data.ipsCount, Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
-            LabelValueRow("Hemispheric Power", "${data.hemisphericPower.toInt()} GW  (${data.fountainDumping})")
+            LabelValueRow("Hemi Power N/S", "${data.hemisphericPowerNorth.toInt()} GW / ${data.hemisphericPowerSouth.toInt()} GW  (${data.fountainDumping})")
         }
 
         // ── CME arrival ───────────────────────────────────────────────
