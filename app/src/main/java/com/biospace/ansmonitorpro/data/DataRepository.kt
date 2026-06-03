@@ -436,7 +436,8 @@ class DataRepository {
             cortisol = when { kp > 6 -> "ELEVATED"; kp > 4 -> "VARIABLE"; else -> "NORMAL" },
             melatonin = when { sr.freqDrift > 0.3 -> "SUPPRESSED"; sr.coherenceScore < 50 -> "VARIABLE"; else -> "VARIABLE" },
             symptoms = symptoms, mitigationProtocol = protocols,
-            breakdown = c, narrativeLine = narrative
+            breakdown = c, narrativeLine = narrative,
+            bzFlip = if (bzHistEngine.size >= 3) { val vals = bzHistEngine.toList(); (1 until vals.size).map { kotlin.math.abs(vals[it] - vals[it-1]) }.average().toFloat() } else kotlin.math.abs(bz).toFloat()
         )
     }
 
@@ -483,16 +484,67 @@ class DataRepository {
 
     // ── Integrated Assessment ─────────────────────────────────────────────
     fun computeAssessment(space: SpaceWeatherData, sr: SchumannData, env: EnvData, ans: AnsData): AssessData {
-        val spaceScore = (space.kp / 9.0 * 25 + if (space.bz < -5) 10.0 else 0.0 + space.solarWindSpeed / 500.0 * 5).toInt().coerceIn(0, 40)
-        val srScore    = ((5.5 - sr.qFactor) / 3.5 * 20 + if (abs(sr.freqDrift) > 0.3) 5.0 else 0.0 + if (sr.amplitudePt > 2.0) 5.0 else 0.0).toInt().coerceIn(0, 30)
-        val envScore   = (abs(env.pressureDelta) / 8.0 * 15 + if (env.tempF > 85) 8.0 else 0.0 + if (env.humidity > 75) 7.0 else 0.0).toInt().coerceIn(0, 30)
-        val total      = ans.loadIndex.coerceIn(0, 100)
-        val label      = when { total >= 75 -> "CRITICAL LOAD"; total >= 55 -> "HIGH LOAD"; total >= 35 -> "MODERATE LOAD"; total >= 20 -> "LOW LOAD"; else -> "MINIMAL LOAD" }
-        val narrative  = "As of this reading, Kp is ${"%.1f".format(space.kp)} (${space.kpLabel}). " +
-            "SR field coherence is ${if (sr.qFactor >= 4.5) "adequate" else "reduced"} (Q=${"%.1f".format(sr.qFactor)}). " +
-            "Local temperature ${env.tempF}°F / Heat Index ${env.heatIndex}°F. " +
-            "Integrated body burden index: $total/100 — ${label.lowercase()}."
-        return AssessData(total, label, spaceScore, 40, srScore, 30, envScore, 30, narrative)
+        val kp = space.kp
+        val bz = space.bz
+        val bt = space.bt
+        val bzFlip = if (ans.bzFlip > 0f) ans.bzFlip else 0f
+
+        // SPACE score: max 25 (Kp, solar wind speed, HSS, SEP, flares)
+        var spaceScore = 0
+        spaceScore += (kp / 9.0 * 12).toInt()                          // Kp: 0-12
+        spaceScore += (space.solarWindSpeed / 800.0 * 5).toInt().coerceAtMost(5) // SW speed: 0-5
+        if (space.hssActive) spaceScore += 4                            // HSS: +4
+        if (space.sepActive) spaceScore += 4                            // SEP: +4
+        val flareBonus = when { space.flares.any { it.flareClass.startsWith("X") } -> 4; space.flares.any { it.flareClass.startsWith("M") } -> 2; else -> 0 }
+        spaceScore += flareBonus
+        spaceScore = spaceScore.coerceIn(0, 25)
+
+        // IMF score: max 25 (Bz southward, Bt magnitude, dBz/dt volatility)
+        var imfScore = 0
+        imfScore += if (bz < 0) (kotlin.math.abs(bz) / 20.0 * 12).toInt().coerceAtMost(12) else 0  // Bz southward: 0-12
+        imfScore += (bt / 30.0 * 8).toInt().coerceAtMost(8)            // Bt magnitude: 0-8
+        imfScore += (bzFlip / 5.0 * 5).toInt().coerceAtMost(5)         // dBz/dt volatility: 0-5
+        imfScore = imfScore.coerceIn(0, 25)
+
+        // SR score: max 20 (Q-factor, amplitude, freq drift)
+        var srScore = 0
+        srScore += ((5.5 - sr.qFactor) / 3.5 * 10).toInt().coerceIn(0, 10)  // Q degradation: 0-10
+        srScore += if (kotlin.math.abs(sr.freqDrift) > 0.3) 5 else if (kotlin.math.abs(sr.freqDrift) > 0.15) 2 else 0  // freq drift: 0-5
+        srScore += if (sr.amplitudePt > 2.0) 5 else if (sr.amplitudePt > 1.5) 2 else 0  // amplitude: 0-5
+        srScore = srScore.coerceIn(0, 20)
+
+        // ENV score: max 15 (pressure delta, heat index, humidity)
+        var envScore = 0
+        envScore += (kotlin.math.abs(env.pressureDelta) / 8.0 * 8).toInt().coerceAtMost(8)  // ΔP: 0-8
+        envScore += if (env.heatIndex > 90) 4 else if (env.heatIndex > 80) 2 else 0         // heat: 0-4
+        envScore += if (env.humidity > 75) 3 else if (env.humidity > 60) 1 else 0           // humidity: 0-3
+        envScore = envScore.coerceIn(0, 15)
+
+        // Total Autonomic Stress Index (0-85 from external drivers)
+        val total = (spaceScore + imfScore + srScore + envScore).coerceIn(0, 100)
+
+        // BIO response score: max 15 (displayed separately — effect, not cause)
+        var bioScore = 0
+        bioScore += if (ans.loadIndex > 70) 15 else if (ans.loadIndex > 50) 10 else if (ans.loadIndex > 30) 5 else 0
+        bioScore = bioScore.coerceIn(0, 15)
+
+        val label = when { total >= 75 -> "CRITICAL LOAD"; total >= 55 -> "HIGH LOAD"; total >= 35 -> "MODERATE LOAD"; total >= 20 -> "LOW LOAD"; else -> "MINIMAL LOAD" }
+
+        val imfStatus = when {
+            bzFlip > 3f -> "highly volatile (dBz/dt=${"%.1f".format(bzFlip)}nT/step)"
+            bzFlip > 1.5f -> "moderately volatile (dBz/dt=${"%.1f".format(bzFlip)}nT/step)"
+            bz < -10 -> "strongly southward (${"%.1f".format(bz)}nT)"
+            bz < -5 -> "southward (${"%.1f".format(bz)}nT)"
+            else -> "stable (${"%.1f".format(bz)}nT)"
+        }
+
+        val narrative = "Kp ${"%.1f".format(kp)} (${space.kpLabel}) — SPACE $spaceScore/25. " +
+            "IMF $imfStatus — IMF $imfScore/25. " +
+            "SR Q=${"%.1f".format(sr.qFactor)} — SR $srScore/20. " +
+            "ΔP ${"%.1f".format(env.pressureDelta)} hPa/hr — ENV $envScore/15. " +
+            "Total Autonomic Stress Index: $total/85 — ${label.lowercase()}."
+
+        return AssessData(total, label, spaceScore, 25, imfScore, 25, srScore, 20, envScore, 15, bioScore, 15, narrative)
     }
 
     private fun comp(name: String, mag: Float, fluc: Float, unit: String = "", value: String = "") =

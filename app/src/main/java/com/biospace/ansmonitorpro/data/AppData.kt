@@ -120,7 +120,8 @@ data class AnsData(
     val symptoms: List<SymptomEntry> = emptyList(),
     val mitigationProtocol: List<String> = emptyList(),
     val breakdown: Map<String, BurdenComponent> = emptyMap(),
-    val narrativeLine: String = ""
+    val narrativeLine: String = "",
+    val bzFlip: Float = 0f
 )
 
 data class BurdenComponent(
@@ -204,11 +205,15 @@ data class AssessData(
     val totalScore: Int = 0,
     val totalLabel: String = "LOW LOAD",
     val spaceScore: Int = 0,
-    val spaceMax: Int = 40,
+    val spaceMax: Int = 25,
+    val imfScore: Int = 0,
+    val imfMax: Int = 25,
     val srScore: Int = 0,
-    val srMax: Int = 30,
+    val srMax: Int = 20,
     val envScore: Int = 0,
-    val envMax: Int = 30,
+    val envMax: Int = 15,
+    val bioScore: Int = 0,
+    val bioMax: Int = 15,
     val clinicalNarrative: String = ""
 )
 

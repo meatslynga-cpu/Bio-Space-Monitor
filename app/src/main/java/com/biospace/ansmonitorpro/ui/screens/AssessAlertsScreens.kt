@@ -58,8 +58,13 @@ fun AssessScreen(data: AssessData) {
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DriverCard("SPACE\nWEATHER",   data.spaceScore, data.spaceMax, Modifier.weight(1f))
+                DriverCard("IMF\nVOLATILITY",  data.imfScore,   data.imfMax,   Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 DriverCard("SCHUMANN\nRESONANCE", data.srScore, data.srMax,   Modifier.weight(1f))
                 DriverCard("LOCAL\nENVIRONMENT", data.envScore, data.envMax,  Modifier.weight(1f))
+                DriverCard("BIO\nRESPONSE",      data.bioScore, data.bioMax,  Modifier.weight(1f))
             }
         }
 
