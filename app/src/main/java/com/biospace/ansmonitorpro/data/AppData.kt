@@ -30,6 +30,7 @@ data class SpaceWeatherData(
     val cmeSpeed: Double = 300.0,
     val cmeArrivalHrs: Int = 999,
     val cmeDirection: String = "Non-Halo",
+    val cmeCount: Int = 0,
     val timestamp: String = ""
 )
 
