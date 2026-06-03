@@ -436,19 +436,19 @@ class DataRepository {
         } else kotlin.math.abs(bz).toFloat()
         val bzStress = (bzFlip * 8f).coerceIn(0f, 60f) + (if (bz < 0) kotlin.math.abs(bz).toFloat() * 3f else 0f).coerceIn(0f, 40f)
         return listOf(
-            SymptomEntry("⚡", "Orthostatic Tachycardia / POTS", (load * 0.50 + kp * 3 + bzStress * 0.4).toInt().coerceIn(5, 95), levelOf(load * 0.50 + kp * 3 + bzStress * 0.4), "Kp=${kp.toInt()} Bz=${"%.1f".format(bz)}nT"),
-            SymptomEntry("💓", "Palpitations / SVE / Ectopics", (load * 0.45 + bzStress * 0.5 + kp * 2.5).toInt().coerceIn(5, 95), levelOf(load * 0.45 + bzStress * 0.5 + kp * 2.5), "Bz flip=${"%.1f".format(bzFlip)}nT/step"),
-            SymptomEntry("🫀", "Brady-Tachy Oscillation", (load * 0.40 + bzStress * 0.6 + (5.5 - q) * 4).toInt().coerceIn(5, 95), levelOf(load * 0.40 + bzStress * 0.6 + (5.5 - q) * 4), "Q=${"%.1f".format(q)} Bz fluctuation"),
-            SymptomEntry("💥", "Crash / PEM", (load * 0.45 + (5.5 - q) * 6 + kp * 2).toInt().coerceIn(5, 90), levelOf(load * 0.45 + (5.5 - q) * 6 + kp * 2), "Q-factor=${"%.1f".format(q)}"),
-            SymptomEntry("🧠", "Cognitive Fog / Brain Fog", (load * 0.40 + bzStress * 0.3 + (5.5 - q) * 4).toInt().coerceIn(5, 90), levelOf(load * 0.40 + bzStress * 0.3 + (5.5 - q) * 4), "Q=${"%.1f".format(q)} Bz=${"%.1f".format(bz)}nT"),
-            SymptomEntry("😵", "Presyncope / Lightheadedness", (load * 0.42 + kp * 3 + bzStress * 0.35).toInt().coerceIn(5, 90), levelOf(load * 0.42 + kp * 3 + bzStress * 0.35), "Kp=${kp.toInt()} speed=${speed.toInt()}km/s"),
-            SymptomEntry("🤕", "Headache / Migraine", (load * 0.35 + bzStress * 0.4 + abs(pd) * 4).toInt().coerceIn(5, 90), levelOf(load * 0.35 + bzStress * 0.4 + abs(pd) * 4), "Bz flip + ΔP=${"%.1f".format(pd)}hPa/hr"),
-            SymptomEntry("😮‍💨", "Shortness of Breath", (load * 0.35 + kp * 2 + bzStress * 0.3).toInt().coerceIn(5, 85), levelOf(load * 0.35 + kp * 2 + bzStress * 0.3), "Kp=${kp.toInt()} load=$load%"),
-            SymptomEntry("📊", "HRV Suppression", (load * 0.38 + bzStress * 0.4 + (5.5 - q) * 5).toInt().coerceIn(5, 90), levelOf(load * 0.38 + bzStress * 0.4 + (5.5 - q) * 5), "Q=${"%.1f".format(q)} Bz fluctuation"),
-            SymptomEntry("🌙", "Sleep Disruption", (load * 0.35 + amp * 10 + bzStress * 0.2).toInt().coerceIn(5, 90), levelOf(load * 0.35 + amp * 10 + bzStress * 0.2), "SR amp=${"%.2f".format(amp)}pT"),
-            SymptomEntry("💧", "Fluid / BP Dysregulation", (load * 0.30 + abs(pd) * 5 + kp * 1.5).toInt().coerceIn(5, 85), levelOf(load * 0.30 + abs(pd) * 5 + kp * 1.5), "ΔP=${"%.1f".format(pd)}hPa/hr"),
-            SymptomEntry("🔥", "Adrenaline Dumps / Surges", (load * 0.38 + bzStress * 0.55 + kp * 2).toInt().coerceIn(5, 90), levelOf(load * 0.38 + bzStress * 0.55 + kp * 2), "Bz flip=${"%.1f".format(bzFlip)}nT/step"),
-            SymptomEntry("🦴", "Muscle Tension / Tremors", (load * 0.28 + speed / 18 + bzStress * 0.2).toInt().coerceIn(5, 80), levelOf(load * 0.28 + speed / 18 + bzStress * 0.2), "Speed=${speed.toInt()}km/s"),
+            SymptomEntry("⚡", "Orthostatic Tachycardia / POTS", (load * 0.85 + kp * 3 + bzStress * 0.4).toInt().coerceIn(5, 95), levelOf(load * 0.85 + kp * 3 + bzStress * 0.4), "Kp=${kp.toInt()} Bz=${"%.1f".format(bz)}nT"),
+            SymptomEntry("💓", "Palpitations / SVE / Ectopics", (load * 0.80 + bzStress * 0.5 + kp * 2.5).toInt().coerceIn(5, 95), levelOf(load * 0.80 + bzStress * 0.5 + kp * 2.5), "Bz flip=${"%.1f".format(bzFlip)}nT/step"),
+            SymptomEntry("🫀", "Brady-Tachy Oscillation", (load * 0.78 + bzStress * 0.6 + (5.5 - q) * 4).toInt().coerceIn(5, 95), levelOf(load * 0.78 + bzStress * 0.6 + (5.5 - q) * 4), "Q=${"%.1f".format(q)} Bz fluctuation"),
+            SymptomEntry("💥", "Crash / PEM", (load * 0.80 + (5.5 - q) * 6 + kp * 2).toInt().coerceIn(5, 90), levelOf(load * 0.80 + (5.5 - q) * 6 + kp * 2), "Q-factor=${"%.1f".format(q)}"),
+            SymptomEntry("🧠", "Cognitive Fog / Brain Fog", (load * 0.75 + bzStress * 0.3 + (5.5 - q) * 4).toInt().coerceIn(5, 90), levelOf(load * 0.75 + bzStress * 0.3 + (5.5 - q) * 4), "Q=${"%.1f".format(q)} Bz=${"%.1f".format(bz)}nT"),
+            SymptomEntry("😵", "Presyncope / Lightheadedness", (load * 0.78 + kp * 3 + bzStress * 0.35).toInt().coerceIn(5, 90), levelOf(load * 0.78 + kp * 3 + bzStress * 0.35), "Kp=${kp.toInt()} speed=${speed.toInt()}km/s"),
+            SymptomEntry("🤕", "Headache / Migraine", (load * 0.72 + bzStress * 0.4 + abs(pd) * 4).toInt().coerceIn(5, 90), levelOf(load * 0.72 + bzStress * 0.4 + abs(pd) * 4), "Bz flip + ΔP=${"%.1f".format(pd)}hPa/hr"),
+            SymptomEntry("😮‍💨", "Shortness of Breath", (load * 0.68 + kp * 2 + bzStress * 0.3).toInt().coerceIn(5, 85), levelOf(load * 0.68 + kp * 2 + bzStress * 0.3), "Kp=${kp.toInt()} load=$load%"),
+            SymptomEntry("📊", "HRV Suppression", (load * 0.75 + bzStress * 0.4 + (5.5 - q) * 5).toInt().coerceIn(5, 90), levelOf(load * 0.75 + bzStress * 0.4 + (5.5 - q) * 5), "Q=${"%.1f".format(q)} Bz fluctuation"),
+            SymptomEntry("🌙", "Sleep Disruption", (load * 0.72 + amp * 10 + bzStress * 0.2).toInt().coerceIn(5, 90), levelOf(load * 0.72 + amp * 10 + bzStress * 0.2), "SR amp=${"%.2f".format(amp)}pT"),
+            SymptomEntry("💧", "Fluid / BP Dysregulation", (load * 0.68 + abs(pd) * 5 + kp * 1.5).toInt().coerceIn(5, 85), levelOf(load * 0.68 + abs(pd) * 5 + kp * 1.5), "ΔP=${"%.1f".format(pd)}hPa/hr"),
+            SymptomEntry("🔥", "Adrenaline Dumps / Surges", (load * 0.75 + bzStress * 0.55 + kp * 2).toInt().coerceIn(5, 90), levelOf(load * 0.75 + bzStress * 0.55 + kp * 2), "Bz flip=${"%.1f".format(bzFlip)}nT/step"),
+            SymptomEntry("🦴", "Muscle Tension / Tremors", (load * 0.70 + speed / 18 + bzStress * 0.2).toInt().coerceIn(5, 80), levelOf(load * 0.70 + speed / 18 + bzStress * 0.2), "Speed=${speed.toInt()}km/s"),
         ).sortedByDescending { it.pct }
     }
 
