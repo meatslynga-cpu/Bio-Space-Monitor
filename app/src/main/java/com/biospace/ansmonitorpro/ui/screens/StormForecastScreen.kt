@@ -63,9 +63,9 @@ fun StormForecastScreen(forecast: SolarStormForecast) {
         SectionCard {
             SubLabel("STORM TIMING")
             Spacer(Modifier.height(8.dp))
-            DataRow("Arrival", forecast.arrivalLabel)
-            DataRow("Peak Duration", if (forecast.peakDurationHrs > 0) "~${forecast.peakDurationHrs}h" else "N/A")
-            DataRow("Full Dissipation", if (forecast.dissipationHrs > 0) "~${forecast.dissipationHrs}h after onset" else "N/A")
+            LabelValueRow("Arrival", forecast.arrivalLabel)
+            LabelValueRow("Peak Duration", if (forecast.peakDurationHrs > 0) "~${forecast.peakDurationHrs}h" else "N/A")
+            LabelValueRow("Full Dissipation", if (forecast.dissipationHrs > 0) "~${forecast.dissipationHrs}h after onset" else "N/A")
         }
 
         // ── Drivers Card ──────────────────────────────────────────────────────
@@ -88,11 +88,11 @@ fun StormForecastScreen(forecast: SolarStormForecast) {
         SectionCard {
             SubLabel("SOURCE SUMMARY")
             Spacer(Modifier.height(8.dp))
-            DataRow("CME Count", forecast.cmeCount.toString())
-            DataRow("CME Max Speed", if (forecast.cmeMaxSpeed > 0) "${forecast.cmeMaxSpeed.toInt()} km/s" else "N/A")
-            DataRow("Max Flare Class", forecast.flareMaxClass)
-            DataRow("Coronal Hole Active", if (forecast.coronalHoleActive) "YES" else "NO")
-            DataRow("HSS Contributing", if (forecast.hssContributing) "YES" else "NO")
+            LabelValueRow("CME Count", forecast.cmeCount.toString())
+            LabelValueRow("CME Max Speed", if (forecast.cmeMaxSpeed > 0) "${forecast.cmeMaxSpeed.toInt()} km/s" else "N/A")
+            LabelValueRow("Max Flare Class", forecast.flareMaxClass)
+            LabelValueRow("Coronal Hole Active", if (forecast.coronalHoleActive) "YES" else "NO")
+            LabelValueRow("HSS Contributing", if (forecast.hssContributing) "YES" else "NO")
         }
 
         // ── Narrative Card ────────────────────────────────────────────────────
