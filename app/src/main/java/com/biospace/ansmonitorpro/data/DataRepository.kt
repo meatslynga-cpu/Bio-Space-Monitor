@@ -454,7 +454,7 @@ class DataRepository {
         val spaceScore = (space.kp / 9.0 * 25 + if (space.bz < -5) 10.0 else 0.0 + space.solarWindSpeed / 500.0 * 5).toInt().coerceIn(0, 40)
         val srScore    = ((5.5 - sr.qFactor) / 3.5 * 20 + if (abs(sr.freqDrift) > 0.3) 5.0 else 0.0 + if (sr.amplitudePt > 2.0) 5.0 else 0.0).toInt().coerceIn(0, 30)
         val envScore   = (abs(env.pressureDelta) / 8.0 * 15 + if (env.tempF > 85) 8.0 else 0.0 + if (env.humidity > 75) 7.0 else 0.0).toInt().coerceIn(0, 30)
-        val total      = (spaceScore + srScore + envScore).coerceIn(0, 100)
+        val total      = ans.loadIndex.coerceIn(0, 100)
         val label      = when { total >= 75 -> "CRITICAL LOAD"; total >= 55 -> "HIGH LOAD"; total >= 35 -> "MODERATE LOAD"; total >= 20 -> "LOW LOAD"; else -> "MINIMAL LOAD" }
         val narrative  = "As of this reading, Kp is ${"%.1f".format(space.kp)} (${space.kpLabel}). " +
             "SR field coherence is ${if (sr.qFactor >= 4.5) "adequate" else "reduced"} (Q=${"%.1f".format(sr.qFactor)}). " +
