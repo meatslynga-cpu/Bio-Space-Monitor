@@ -405,7 +405,7 @@ class DataRepository {
             if (abs(pd) > 2.0) append(" Rapid pressure change.")
         }
 
-        val symptoms = buildSymptoms(overall, kp, bz, speed, q, amp, pd)
+        val symptoms = buildSymptoms(overall, kp, bz, space.bt, speed, q, amp, pd)
         val protocols = buildProtocols(overall, kp, bz, pd)
 
         return AnsData(
@@ -429,12 +429,13 @@ class DataRepository {
         AlertLevel.RED -> "HIGH LOAD"; AlertLevel.BLUE -> "EXTREME LOAD"
     }
 
-    private fun buildSymptoms(load: Int, kp: Double, bz: Double, speed: Double, q: Double, amp: Double, pd: Double): List<SymptomEntry> {
+    private fun buildSymptoms(load: Int, kp: Double, bz: Double, bt: Double, speed: Double, q: Double, amp: Double, pd: Double): List<SymptomEntry> {
         val bzFlip = if (bzHistEngine.size >= 3) {
             val vals = bzHistEngine.toList()
             (1 until vals.size).map { kotlin.math.abs(vals[it] - vals[it-1]) }.average().toFloat()
         } else kotlin.math.abs(bz).toFloat()
-        val bzStress = (bzFlip * 8f).coerceIn(0f, 60f) + (if (bz < 0) kotlin.math.abs(bz).toFloat() * 3f else 0f).coerceIn(0f, 40f)
+        val btStress = (bt.toFloat() * 1.5f).coerceIn(0f, 35f)
+        val bzStress = (bzFlip * 8f).coerceIn(0f, 60f) + (if (bz < 0) kotlin.math.abs(bz).toFloat() * 3f else 0f).coerceIn(0f, 40f) + btStress
         return listOf(
             SymptomEntry("⚡", "Orthostatic Tachycardia / POTS", (load * 0.85 + kp * 3 + bzStress * 0.4).toInt().coerceIn(5, 95), levelOf(load * 0.85 + kp * 3 + bzStress * 0.4), "Kp=${kp.toInt()} Bz=${"%.1f".format(bz)}nT"),
             SymptomEntry("💓", "Palpitations / SVE / Ectopics", (load * 0.80 + bzStress * 0.5 + kp * 2.5).toInt().coerceIn(5, 95), levelOf(load * 0.80 + bzStress * 0.5 + kp * 2.5), "Bz flip=${"%.1f".format(bzFlip)}nT/step"),
