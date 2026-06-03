@@ -46,69 +46,91 @@ private val FIELDS = listOf(
 )
 
 private fun exportSymptomLogs(context: Context, logs: List<SymptomLog>): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-    val sb = StringBuilder()
-    sb.appendLine("ANS TRIGGER PRO — SYMPTOM LOG EXPORT")
-    sb.appendLine("Generated: ${sdf.format(Date())}")
-    sb.appendLine("Total entries: ${logs.size}")
-    sb.appendLine("=".repeat(60))
+    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+    val paint = android.graphics.Paint().apply { textSize = 11f; isAntiAlias = true }
+    val titlePaint = android.graphics.Paint().apply { textSize = 14f; isFakeBoldText = true; isAntiAlias = true }
+    val headPaint = android.graphics.Paint().apply { textSize = 10f; isFakeBoldText = true; isAntiAlias = true }
+    val pageWidth = 595; val pageHeight = 842; val margin = 40f
+    val pdf = android.graphics.pdf.PdfDocument()
+    var pageNum = 1
+    var pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+    var page = pdf.startPage(pageInfo)
+    var canvas = page.canvas
+    var y = margin
+
+    fun newPage() {
+        pdf.finishPage(page)
+        pageNum++
+        pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+        page = pdf.startPage(pageInfo)
+        canvas = page.canvas
+        y = margin
+    }
+    fun checkY(needed: Float) { if (y + needed > pageHeight - margin) newPage() }
+    fun drawLine(text: String, p: android.graphics.Paint = paint, indent: Float = 0f) {
+        checkY(p.textSize + 4f)
+        canvas.drawText(text, margin + indent, y, p)
+        y += p.textSize + 4f
+    }
+    fun drawRule() {
+        checkY(8f)
+        canvas.drawLine(margin, y, pageWidth - margin, y, paint)
+        y += 8f
+    }
+
+    drawLine("ANS TRIGGER PRO — SYMPTOM LOG", titlePaint)
+    drawLine("Generated: ${sdf.format(java.util.Date())}   Entries: ${logs.size}", paint)
+    drawRule()
+
     logs.forEach { log ->
-        sb.appendLine()
-        sb.appendLine("DATE/TIME: ${sdf.format(Date(log.timestamp))}")
-        sb.appendLine("── SYMPTOMS ──────────────────────────────")
-        sb.appendLine("  Lightheadedness : ${log.lightheadedness}/10")
-        sb.appendLine("  Heart Pounding  : ${log.heartPounding}/10")
-        sb.appendLine("  Fatigue         : ${log.fatigue}/10")
-        sb.appendLine("  Brain Fog       : ${log.brainFog}/10")
-        sb.appendLine("  Chest Discomfort: ${log.chestPain}/10")
-        sb.appendLine("  Nausea          : ${log.nausea}/10")
-        sb.appendLine("  Short of Breath : ${log.shortBreath}/10")
-        sb.appendLine("  Tremors         : ${log.tremors}/10")
-        sb.appendLine("  Blurred Vision  : ${log.blurredVision}/10")
-        sb.appendLine("  Headache        : ${log.headache}/10")
+        checkY(20f)
+        drawLine("${sdf.format(java.util.Date(log.timestamp))}  |  Burden: ${log.burdenAtLog}%  |  Alert: ${log.alertLevelAtLog}", headPaint)
+        drawLine("SYMPTOMS", headPaint, 8f)
+        listOf(
+            "Lightheadedness: ${log.lightheadedness}/10",
+            "Heart Pounding: ${log.heartPounding}/10",
+            "Fatigue: ${log.fatigue}/10",
+            "Brain Fog: ${log.brainFog}/10",
+            "Chest Discomfort: ${log.chestPain}/10",
+            "Nausea: ${log.nausea}/10",
+            "Short of Breath: ${log.shortBreath}/10",
+            "Tremors: ${log.tremors}/10",
+            "Blurred Vision: ${log.blurredVision}/10",
+            "Headache: ${log.headache}/10"
+        ).forEach { drawLine(it, paint, 16f) }
         val total = log.lightheadedness + log.heartPounding + log.fatigue + log.brainFog +
             log.chestPain + log.nausea + log.shortBreath + log.tremors + log.blurredVision + log.headache
-        sb.appendLine("  AVG SEVERITY    : ${"%.1f".format(total / 10.0)}/10")
-        if (log.notes.isNotBlank()) sb.appendLine("  NOTES           : ${log.notes}")
-        sb.appendLine("── SPACE WEATHER AT TIME OF LOG ──────────")
-        sb.appendLine("  Kp Index        : ${"%.1f".format(log.kpAtLog)}")
-        sb.appendLine("  IMF Bz          : ${"%.1f".format(log.bzAtLog)} nT")
-        sb.appendLine("  Solar Wind      : ${log.solarWindAtLog.toInt()} km/s")
-        sb.appendLine("  Storm Level     : ${log.stormLevelAtLog}")
-        sb.appendLine("  HSS Active      : ${if (log.hssAtLog) "YES" else "No"}")
-        sb.appendLine("  SEP Active      : ${if (log.sepAtLog) "YES" else "No"}")
-        sb.appendLine("  GST Active      : ${if (log.gstAtLog) "YES" else "No"}")
-        sb.appendLine("── SCHUMANN AT TIME OF LOG ───────────────")
-        sb.appendLine("  Frequency       : ${"%.2f".format(log.schumannHzAtLog)} Hz")
-        sb.appendLine("  Q-Factor        : ${"%.1f".format(log.schumannQAtLog)}")
-        sb.appendLine("  Amplitude       : ${"%.2f".format(log.schumannAmpAtLog)} pT")
-        sb.appendLine("── ENVIRONMENT AT TIME OF LOG ────────────")
-        sb.appendLine("  Temperature     : ${log.tempAtLog}°F")
-        sb.appendLine("  Heat Index      : ${log.heatIndexAtLog}°F")
-        sb.appendLine("  Humidity        : ${log.humidAtLog}%")
-        sb.appendLine("  Pressure        : ${"%.1f".format(log.pressureAtLog)} hPa")
-        sb.appendLine("  Pressure Delta  : ${"%.1f".format(log.pressureDeltaAtLog)} hPa/hr")
-        sb.appendLine("── ANS BURDEN ────────────────────────────")
-        sb.appendLine("  Load Index      : ${log.burdenAtLog}%")
-        sb.appendLine("  Alert Level     : ${log.alertLevelAtLog}")
-        sb.appendLine("-".repeat(60))
+        drawLine("Avg Severity: ${"%.1f".format(total / 10.0)}/10", headPaint, 16f)
+        if (log.notes.isNotBlank()) drawLine("Notes: ${log.notes}", paint, 16f)
+        drawLine("SPACE WEATHER", headPaint, 8f)
+        drawLine("Kp: ${"%.1f".format(log.kpAtLog)}  Bz: ${"%.1f".format(log.bzAtLog)} nT  Wind: ${log.solarWindAtLog.toInt()} km/s  Storm: ${log.stormLevelAtLog}", paint, 16f)
+        drawLine("HSS: ${if (log.hssAtLog) "YES" else "No"}  SEP: ${if (log.sepAtLog) "YES" else "No"}  GST: ${if (log.gstAtLog) "YES" else "No"}", paint, 16f)
+        drawLine("SCHUMANN", headPaint, 8f)
+        drawLine("Freq: ${"%.2f".format(log.schumannHzAtLog)} Hz  Q: ${"%.1f".format(log.schumannQAtLog)}  Amp: ${"%.2f".format(log.schumannAmpAtLog)} pT", paint, 16f)
+        drawLine("ENVIRONMENT", headPaint, 8f)
+        drawLine("Temp: ${log.tempAtLog}°F  HI: ${log.heatIndexAtLog}°F  Humidity: ${log.humidAtLog}%  Pressure: ${"%.1f".format(log.pressureAtLog)} hPa  ΔP: ${"%.1f".format(log.pressureDeltaAtLog)} hPa/hr", paint, 16f)
+        drawRule()
     }
-    val filename = "ANSTriggerPro_SymptomLog_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.txt"
+    pdf.finishPage(page)
+
+    val filename = "ANSTriggerPro_SymptomLog_${java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())}.pdf"
     return try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, filename)
-                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
+                put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/pdf")
+                put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
             }
-            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-            uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> os.write(sb.toString().toByteArray()) } }
+            val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> pdf.writeTo(os) } }
         } else {
-            val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), filename)
-            file.writeText(sb.toString())
+            val file = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), filename)
+            java.io.FileOutputStream(file).use { pdf.writeTo(it) }
         }
+        pdf.close()
         "Saved to Downloads/$filename"
     } catch (e: Exception) {
+        pdf.close()
         "Error: ${e.message}"
     }
 }

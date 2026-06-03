@@ -136,19 +136,56 @@ fun ReportScreen(
                     .background(AppColors.Cyan.copy(.1f))
                     .border(1.dp, AppColors.Cyan, RoundedCornerShape(10.dp))
                     .clickable {
-                        val filename = "ANSTriggerPro_Report_${java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())}.txt"
+                        val filename = "ANSTriggerPro_Report_${java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US).format(java.util.Date())}.pdf"
                         try {
+                            val paint = android.graphics.Paint().apply { textSize = 11f; isAntiAlias = true }
+                            val titlePaint = android.graphics.Paint().apply { textSize = 15f; isFakeBoldText = true; isAntiAlias = true }
+                            val pageWidth = 595; val pageHeight = 842; val margin = 40f
+                            val pdf = android.graphics.pdf.PdfDocument()
+                            var pageNum = 1
+                            var pi = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+                            var pg = pdf.startPage(pi)
+                            var canvas = pg.canvas
+                            var y = margin
+                            fun newPage() {
+                                pdf.finishPage(pg); pageNum++
+                                pi = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+                                pg = pdf.startPage(pi); canvas = pg.canvas; y = margin
+                            }
+                            fun drawLine(text: String, p: android.graphics.Paint = paint) {
+                                if (y + p.textSize + 4f > pageHeight - margin) newPage()
+                                canvas.drawText(text, margin, y, p); y += p.textSize + 4f
+                            }
+                            drawLine("ANS TRIGGER PRO — AI HEALTH REPORT", titlePaint)
+                            drawLine("Generated: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}", paint)
+                            canvas.drawLine(margin, y, pageWidth - margin, y, paint); y += 10f
+                            reportOutput.lines().forEach { line ->
+                                if (line.isBlank()) { y += 6f } else {
+                                    val words = line.split(" ")
+                                    val sb = StringBuilder()
+                                    words.forEach { word ->
+                                        val test = if (sb.isEmpty()) word else "$sb $word"
+                                        if (paint.measureText(test) > pageWidth - margin * 2) {
+                                            drawLine(sb.toString()); sb.clear(); sb.append(word)
+                                        } else { if (sb.isNotEmpty()) sb.append(" "); sb.append(word) }
+                                    }
+                                    if (sb.isNotEmpty()) drawLine(sb.toString())
+                                }
+                            }
+                            pdf.finishPage(pg)
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                                 val values = android.content.ContentValues().apply {
                                     put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename)
-                                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+                                    put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/pdf")
                                     put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
                                 }
                                 val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                                uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> os.write(reportOutput.toByteArray()) } }
+                                uri?.let { context.contentResolver.openOutputStream(it)?.use { os -> pdf.writeTo(os) } }
                             } else {
-                                java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), filename).writeText(reportOutput)
+                                val file = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), filename)
+                                java.io.FileOutputStream(file).use { pdf.writeTo(it) }
                             }
+                            pdf.close()
                             downloadMsg = "Saved to Downloads/$filename"
                         } catch (e: Exception) { downloadMsg = "Error: ${e.message}" }
                     }
