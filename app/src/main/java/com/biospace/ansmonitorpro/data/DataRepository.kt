@@ -39,7 +39,7 @@ class DataRepository {
     suspend fun fetchSpaceWeather(): SpaceWeatherData = withContext(Dispatchers.IO) {
         val today = dateStr(0); val week = dateStr(7)
 
-        val kpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/json/boulder_k_index_1m.json").build()).execute().body?.string() ?: "" } }
+        val kpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json").build()).execute().body?.string() ?: "" } }
         val plaR  = async { runCatching { noaa.getSolarWindPlasma() } }
         val magR  = async { runCatching { noaa.getSolarWindMag() } }
         val hpR   = async { runCatching { client.newCall(okhttp3.Request.Builder().url("https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt").build()).execute().body?.string() ?: "" } }
@@ -68,7 +68,7 @@ class DataRepository {
             val arr = org.json.JSONArray(kpRaw ?: "[]")
             for (i in 0 until arr.length()) {
                 val row = arr.getJSONObject(i)
-                val v = row.optDouble("k_index", -1.0)
+                val v = row.optDouble("Kp", -1.0)
                 if (v >= 0) kpHist.add(v)
             }
             if (kpHist.isNotEmpty()) kp = kpHist.last()
